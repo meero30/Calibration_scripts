@@ -5,7 +5,7 @@ The following scripts are for calculating extrinsic parameters using the keypoin
 ## How to use
 #### CLI
 ```
-python hybrid_calibration.py --openpose_dir <path_to_openpose_data> \
+python keypoints_calibration.py --openpose_dir <path_to_openpose_data> \
                             --intrinsics_file <path_to_intrinsics.toml> \
                             --segments_file <path_to_segments.toml> \
                             --confidence 0.7 \
