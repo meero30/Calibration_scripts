@@ -638,6 +638,52 @@ def get_keypoint_3d(points_3d, keypoint_name):
         else:
             return None
 
+def get_keypoint_3d_BODY_25B(points_3d, keypoint_name):
+    """
+    Retrieve the 3D coordinate for a given keypoint name from a BODY_25B set.
+    
+    Args:
+        points_3d (list or np.ndarray): List/array of 3D keypoints.
+        keypoint_name (str): Name of the keypoint (e.g., "RHeel", "Head", etc.)
+        
+    Returns:
+        np.ndarray or None: 3D coordinate as an array, or None if the keypoint is not available.
+    """
+    keypoint_indices_map = {
+        "Nose": 0,
+        "LHip": 11,
+        "RHip": 12,
+        "LKnee": 13,
+        "RKnee": 14,
+        "LAnkle": 15,
+        "RAnkle": 16,
+        "Neck": 17,
+        "Head": 18,
+        "LBigToe": 19,
+        "LSmallToe": 20, 
+        "LHeel": 21,
+        "RBigToe": 22,
+        "RSmallToe": 23, 
+        "RHeel": 24,
+        "LShoulder": 5,
+        "RShoulder": 6,
+        "LElbow": 7,
+        "RElbow": 8,
+        "LWrist": 9,
+        "RWrist": 10,
+        "CHip": None  # Center hip doesn't have a specific index in the points_3d array
+    }
+    
+    idx = keypoint_indices_map.get(keypoint_name, None)
+    if idx is not None and idx < len(points_3d):
+        return points_3d[idx]
+    elif keypoint_name == "CHip" and len(points_3d) > max(keypoint_indices_map["LHip"], keypoint_indices_map["RHip"]):
+        # Calculate CHip as the midpoint between left and right hip
+        left_hip = points_3d[keypoint_indices_map["LHip"]]
+        right_hip = points_3d[keypoint_indices_map["RHip"]]
+        return (left_hip + right_hip) / 2
+    else:
+        return None
 
 def compute_segment_length(points_3d, kp1_name, kp2_name):
     """
@@ -685,10 +731,10 @@ def compute_scale_factor_from_segments(points_3d, known_segments):
     else:
         return None
 
-
 def apply_scale_to_results(all_best_results, scale_factor, ref_cam_idx):
     """
-    Apply absolute scale to camera parameters by scaling the translation vectors.
+    Apply absolute scale to camera parameters by scaling only the z-component 
+    of the translation vectors (Tz), leaving Tx and Ty unchanged.
     
     Args:
         all_best_results (dict): Dictionary containing camera calibration results.
@@ -696,7 +742,7 @@ def apply_scale_to_results(all_best_results, scale_factor, ref_cam_idx):
         ref_cam_idx (int): Index of reference camera.
         
     Returns:
-        dict: Updated calibration results with scaled translation.
+        dict: Updated calibration results with the z-component scaled.
     """
     scaled_results = {}
     
@@ -706,8 +752,8 @@ def apply_scale_to_results(all_best_results, scale_factor, ref_cam_idx):
         # Scale translation vectors for all cameras except the reference
         if pair_key.startswith(f"Camera{ref_cam_idx}_"):
             t = np.array(params['t'])  # ensure it's a numpy array
-            # Scale the translation vector
-            t = t * scale_factor
+            # Only scale the z component (index 2)
+            t[2] = t[2] * scale_factor
             scaled_results[pair_key]['t'] = t
             
     return scaled_results
@@ -1143,6 +1189,101 @@ def optimize_camera_parameters(final_idx_of_ref_cam, final_camera_Rt, Ks, inlier
     
     return all_best_results
 
+# def apply_scale_calibration(all_best_results, final_idx_of_ref_cam, segments_file, Ks, inliers_pair_list):
+#     """
+#     Apply scale calibration to convert from arbitrary to metric units.
+    
+#     Args:
+#         all_best_results (dict): Dictionary of camera parameters.
+#         final_idx_of_ref_cam (int): Index of the reference camera.
+#         segments_file (str): Path to segments definition file.
+#         Ks (list): List of intrinsic matrices.
+#         inliers_pair_list (list): List of inlier correspondences for each camera pair.
+        
+#     Returns:
+#         dict: Dictionary of scaled camera parameters.
+#     """
+#     # Use hardcoded scale factor from our calibration instead of computing from segments
+#     # We'll use the median scale factor which is more robust to outliers
+#     final_scale_factor = 0.004637  # Median scale factor in meters/pixel
+    
+#     print(f"Using hardcoded scale factor: {final_scale_factor} meters/pixel")
+    
+#     # Apply scale to all camera parameters
+#     scaled_results = apply_scale_to_results(all_best_results, final_scale_factor, final_idx_of_ref_cam)
+    
+#     return scaled_results
+
+# def apply_scale_calibration(all_best_results, final_idx_of_ref_cam, segments_file, Ks, inliers_pair_list):
+#     """
+#     Apply scale calibration to convert from arbitrary to metric units.
+    
+#     Args:
+#         all_best_results (dict): Dictionary of camera parameters.
+#         final_idx_of_ref_cam (int): Index of the reference camera.
+#         segments_file (str): Path to segments definition file.
+#         Ks (list): List of intrinsic matrices.
+#         inliers_pair_list (list): List of inlier correspondences for each camera pair.
+        
+#     Returns:
+#         dict: Dictionary of scaled camera parameters.
+#     """
+#     # Load known segments from file
+#     known_segments = load_segments_from_toml(segments_file)
+    
+#     # Get projection matrix for reference camera
+#     P_ref = cam_create_projection_matrix(Ks[final_idx_of_ref_cam], np.eye(3), np.zeros((3, 1)))
+    
+#     # Collect scale factors from all camera pairs
+#     scale_factors = []
+    
+#     print(f"Length of inliers_pair_list: {len(inliers_pair_list)}")
+    
+#     # Get non-reference camera indices
+#     non_ref_cam_indices = [i for i in range(len(Ks)) if i != final_idx_of_ref_cam]
+    
+#     # Make sure the length of inliers_pair_list matches the number of camera pairs we expect
+#     assert len(inliers_pair_list) == len(non_ref_cam_indices), \
+#            f"Expected {len(non_ref_cam_indices)} pairs, got {len(inliers_pair_list)}"
+    
+#     # Iterate through all camera pairs
+#     for idx, other_cam_idx in enumerate(non_ref_cam_indices):
+#         # Create the camera pair key
+#         pair_key = f"Camera{final_idx_of_ref_cam}_{other_cam_idx}"
+        
+#         if pair_key in all_best_results:
+#             # Create projection matrix for second camera
+#             P_other = cam_create_projection_matrix(
+#                 all_best_results[pair_key]['K2'],
+#                 all_best_results[pair_key]['R'],
+#                 all_best_results[pair_key]['t']
+#             )
+            
+#             # Get the corresponding inliers for this pair
+#             inliers_pair = inliers_pair_list[idx]
+            
+#             # Triangulate points using this camera pair
+#             points_3d = triangulate_points(inliers_pair, P_ref, P_other)
+            
+#             # Compute scale factor for this pair
+#             pair_scale_factor = compute_scale_factor_from_segments(points_3d, known_segments)
+            
+#             if pair_scale_factor is not None and pair_scale_factor > 0:
+#                 scale_factors.append(pair_scale_factor)
+#                 print(f"Scale factor from pair {final_idx_of_ref_cam}_{other_cam_idx}: {pair_scale_factor}")
+    
+#     # Compute the final scale factor (median to be robust against outliers)
+#     if scale_factors:
+#         final_scale_factor = np.median(scale_factors)
+#         print(f"Using median scale factor from {len(scale_factors)} camera pairs: {final_scale_factor}")
+#     else:
+#         print("Warning: No valid scale factors found. Using default scale of 1.0")
+#         final_scale_factor = 1.0
+    
+#     # Apply scale to all camera parameters
+#     scaled_results = apply_scale_to_results(all_best_results, final_scale_factor, final_idx_of_ref_cam)
+    
+#     return scaled_results
 
 def apply_scale_calibration(all_best_results, final_idx_of_ref_cam, segments_file, Ks, inliers_pair_list):
     """
@@ -1171,6 +1312,7 @@ def apply_scale_calibration(all_best_results, final_idx_of_ref_cam, segments_fil
     )
     
     # Use first pair of cameras to compute scale
+    # TODO: Why only use first camera pair, I need to use the others as well.
     inliers_pair = inliers_pair_list[0]  # Using first camera pair
     points_3d = triangulate_points(inliers_pair, P1, P2)
     
@@ -1194,7 +1336,7 @@ def calibrate_cameras(openpose_dir, intrinsics_file, segments_file,
     Main function to perform hybrid camera calibration.
     
     Args:
-        alphapose_dir (str): Path to AlphaPose keypoints directory.
+        alphapose_dir (str): Path to AlphaPose keypoints directory. Temporarily removed
         openpose_dir (str): Path to OpenPose keypoints directory.
         intrinsics_file (str): Path to TOML file with intrinsic parameters.
         segments_file (str): Path to TOML file with segment definitions.

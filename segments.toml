@@ -2,7 +2,7 @@
 # This file defines standard body segment lengths for an average adult
 
 [segments]
-# Full height measurements (from heel to head)
+# Full height measurements (from heel to head), height minus the 0.10m which is the average distance of eyes to the top of head
 height_right = { keypoint1 = "RHeel", keypoint2 = "Head", length = 1.75 }
 height_left = { keypoint1 = "LHeel", keypoint2 = "Head", length = 1.75 }
 
