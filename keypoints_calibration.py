@@ -25,8 +25,11 @@ import argparse
 import toml
 from pathlib import Path
 from scipy.optimize import least_squares
-
-
+import io
+from contextlib import redirect_stdout
+from calculate_scale import calculate_scale_factor
+from Pose2Sim import Pose2Sim
+import trc_Xup_to_Yup
 
 from keypoints_confidence_multi import extract_paired_keypoints_with_reference
 from write_to_toml import write_to_toml
@@ -580,7 +583,7 @@ def optimize_extrinsic_parameters(points_3d, other_cameras_keypoints, ext_K, ext
 
     return optimized_t
 
-
+# TODO: REMOVE ONCE MIGRATED
 def get_keypoint_3d(points_3d, keypoint_name):
     """
     Retrieve the 3D coordinate for a given keypoint name from a BODY_25 set.
@@ -637,7 +640,7 @@ def get_keypoint_3d(points_3d, keypoint_name):
             return points_3d[idx]
         else:
             return None
-
+# TODO: REMOVE ONCE MIGRATED
 def get_keypoint_3d_BODY_25B(points_3d, keypoint_name):
     """
     Retrieve the 3D coordinate for a given keypoint name from a BODY_25B set.
@@ -685,6 +688,7 @@ def get_keypoint_3d_BODY_25B(points_3d, keypoint_name):
     else:
         return None
 
+# TODO: REMOVE ONCE MIGRATED
 def compute_segment_length(points_3d, kp1_name, kp2_name):
     """
     Compute the Euclidean distance between two keypoints.
@@ -704,7 +708,7 @@ def compute_segment_length(points_3d, kp1_name, kp2_name):
     else:
         return None
 
-
+#TODO Remove once migrated
 def compute_scale_factor_from_segments(points_3d, known_segments):
     """
     Compute an absolute scale factor by comparing the measured 3D segment lengths
@@ -731,10 +735,38 @@ def compute_scale_factor_from_segments(points_3d, known_segments):
     else:
         return None
 
+# def apply_scale_to_results(all_best_results, scale_factor, ref_cam_idx):
+#     """
+#     Apply absolute scale to camera parameters by scaling only the z-component 
+#     of the translation vectors (Tz), leaving Tx and Ty unchanged.
+    
+#     Args:
+#         all_best_results (dict): Dictionary containing camera calibration results.
+#         scale_factor (float): Scale factor to convert to metric units.
+#         ref_cam_idx (int): Index of reference camera.
+        
+#     Returns:
+#         dict: Updated calibration results with the z-component scaled.
+#     """
+#     scaled_results = {}
+    
+#     for pair_key, params in all_best_results.items():
+#         scaled_results[pair_key] = params.copy()
+        
+#         # Scale translation vectors for all cameras except the reference
+#         if pair_key.startswith(f"Camera{ref_cam_idx}_"):
+#             t = np.array(params['t'])  # ensure it's a numpy array
+#             # Only scale the z component (index 2)
+#             t[2] = t[2] * scale_factor
+#             scaled_results[pair_key]['t'] = t
+            
+#     return scaled_results
+
+
 def apply_scale_to_results(all_best_results, scale_factor, ref_cam_idx):
     """
-    Apply absolute scale to camera parameters by scaling only the z-component 
-    of the translation vectors (Tz), leaving Tx and Ty unchanged.
+    Apply absolute scale to camera parameters by scaling all components
+    of the translation vectors uniformly (tx, ty, tz).
     
     Args:
         all_best_results (dict): Dictionary containing camera calibration results.
@@ -742,22 +774,23 @@ def apply_scale_to_results(all_best_results, scale_factor, ref_cam_idx):
         ref_cam_idx (int): Index of reference camera.
         
     Returns:
-        dict: Updated calibration results with the z-component scaled.
+        dict: Updated calibration results with scaled translations.
     """
     scaled_results = {}
     
     for pair_key, params in all_best_results.items():
         scaled_results[pair_key] = params.copy()
         
-        # Scale translation vectors for all cameras except the reference
-        if pair_key.startswith(f"Camera{ref_cam_idx}_"):
-            t = np.array(params['t'])  # ensure it's a numpy array
-            # Only scale the z component (index 2)
-            t[2] = t[2] * scale_factor
-            scaled_results[pair_key]['t'] = t
+        # Skip pairs that don't involve the reference camera
+        if f"Camera{ref_cam_idx}" not in pair_key:
+            continue
+            
+        # Scale the entire translation vector uniformly
+        t = np.array(params['t'])  # ensure it's a numpy array
+        t = t * scale_factor
+        scaled_results[pair_key]['t'] = t
             
     return scaled_results
-
 
 def load_intrinsics_from_toml(toml_file):
     """
@@ -812,7 +845,7 @@ def load_intrinsics_from_toml(toml_file):
     print(f"Loaded {len(Ks)} intrinsic matrices")
     return Ks, image_size
 
-
+# TODO: REMOVE ONCE MIGRATED
 def load_segments_from_toml(toml_file):
     """
     Load known body segments from a TOML file. Based on Dr. David Pagnon's algorithm.
@@ -875,7 +908,7 @@ def load_segments_from_toml(toml_file):
         print(f"  {i+1}. {kp1} to {kp2}: {length}m")
     
     return known_segments
-
+# TODO: REMOVE ONCE MIGRATED
 def get_default_segments():
     """
     Provide default body segment definitions if none are available from config.
@@ -1189,102 +1222,7 @@ def optimize_camera_parameters(final_idx_of_ref_cam, final_camera_Rt, Ks, inlier
     
     return all_best_results
 
-# def apply_scale_calibration(all_best_results, final_idx_of_ref_cam, segments_file, Ks, inliers_pair_list):
-#     """
-#     Apply scale calibration to convert from arbitrary to metric units.
-    
-#     Args:
-#         all_best_results (dict): Dictionary of camera parameters.
-#         final_idx_of_ref_cam (int): Index of the reference camera.
-#         segments_file (str): Path to segments definition file.
-#         Ks (list): List of intrinsic matrices.
-#         inliers_pair_list (list): List of inlier correspondences for each camera pair.
-        
-#     Returns:
-#         dict: Dictionary of scaled camera parameters.
-#     """
-#     # Use hardcoded scale factor from our calibration instead of computing from segments
-#     # We'll use the median scale factor which is more robust to outliers
-#     final_scale_factor = 0.004637  # Median scale factor in meters/pixel
-    
-#     print(f"Using hardcoded scale factor: {final_scale_factor} meters/pixel")
-    
-#     # Apply scale to all camera parameters
-#     scaled_results = apply_scale_to_results(all_best_results, final_scale_factor, final_idx_of_ref_cam)
-    
-#     return scaled_results
-
-# def apply_scale_calibration(all_best_results, final_idx_of_ref_cam, segments_file, Ks, inliers_pair_list):
-#     """
-#     Apply scale calibration to convert from arbitrary to metric units.
-    
-#     Args:
-#         all_best_results (dict): Dictionary of camera parameters.
-#         final_idx_of_ref_cam (int): Index of the reference camera.
-#         segments_file (str): Path to segments definition file.
-#         Ks (list): List of intrinsic matrices.
-#         inliers_pair_list (list): List of inlier correspondences for each camera pair.
-        
-#     Returns:
-#         dict: Dictionary of scaled camera parameters.
-#     """
-#     # Load known segments from file
-#     known_segments = load_segments_from_toml(segments_file)
-    
-#     # Get projection matrix for reference camera
-#     P_ref = cam_create_projection_matrix(Ks[final_idx_of_ref_cam], np.eye(3), np.zeros((3, 1)))
-    
-#     # Collect scale factors from all camera pairs
-#     scale_factors = []
-    
-#     print(f"Length of inliers_pair_list: {len(inliers_pair_list)}")
-    
-#     # Get non-reference camera indices
-#     non_ref_cam_indices = [i for i in range(len(Ks)) if i != final_idx_of_ref_cam]
-    
-#     # Make sure the length of inliers_pair_list matches the number of camera pairs we expect
-#     assert len(inliers_pair_list) == len(non_ref_cam_indices), \
-#            f"Expected {len(non_ref_cam_indices)} pairs, got {len(inliers_pair_list)}"
-    
-#     # Iterate through all camera pairs
-#     for idx, other_cam_idx in enumerate(non_ref_cam_indices):
-#         # Create the camera pair key
-#         pair_key = f"Camera{final_idx_of_ref_cam}_{other_cam_idx}"
-        
-#         if pair_key in all_best_results:
-#             # Create projection matrix for second camera
-#             P_other = cam_create_projection_matrix(
-#                 all_best_results[pair_key]['K2'],
-#                 all_best_results[pair_key]['R'],
-#                 all_best_results[pair_key]['t']
-#             )
-            
-#             # Get the corresponding inliers for this pair
-#             inliers_pair = inliers_pair_list[idx]
-            
-#             # Triangulate points using this camera pair
-#             points_3d = triangulate_points(inliers_pair, P_ref, P_other)
-            
-#             # Compute scale factor for this pair
-#             pair_scale_factor = compute_scale_factor_from_segments(points_3d, known_segments)
-            
-#             if pair_scale_factor is not None and pair_scale_factor > 0:
-#                 scale_factors.append(pair_scale_factor)
-#                 print(f"Scale factor from pair {final_idx_of_ref_cam}_{other_cam_idx}: {pair_scale_factor}")
-    
-#     # Compute the final scale factor (median to be robust against outliers)
-#     if scale_factors:
-#         final_scale_factor = np.median(scale_factors)
-#         print(f"Using median scale factor from {len(scale_factors)} camera pairs: {final_scale_factor}")
-#     else:
-#         print("Warning: No valid scale factors found. Using default scale of 1.0")
-#         final_scale_factor = 1.0
-    
-#     # Apply scale to all camera parameters
-#     scaled_results = apply_scale_to_results(all_best_results, final_scale_factor, final_idx_of_ref_cam)
-    
-#     return scaled_results
-
+# TODO: TO REMOVE ONCE MIGRATED
 def apply_scale_calibration(all_best_results, final_idx_of_ref_cam, segments_file, Ks, inliers_pair_list):
     """
     Apply scale calibration to convert from arbitrary to metric units.
@@ -1328,10 +1266,42 @@ def apply_scale_calibration(all_best_results, final_idx_of_ref_cam, segments_fil
     scaled_results = apply_scale_to_results(all_best_results, scale_factor, final_idx_of_ref_cam)
     
     return scaled_results
+# Used creation time instead of modification time which is wrong
+# def get_latest_trc_file(trc_file_dir):
+#     """Get the most recently created TRC file in the directory"""
+#     trc_files = glob.glob(os.path.join(trc_file_dir, "*.trc"))
+#     if not trc_files:
+#         return None
+        
+    # # Return the most recent file
+    # return max(trc_files, key=os.path.getctime)
+
+def get_latest_trc_file(trc_file_dir):
+    """Get the most recently modified TRC file in the directory."""
+    trc_files = glob.glob(os.path.join(trc_file_dir, "*.trc"))
+    if not trc_files:
+        return None
+    # Sort by modification time (newest last)
+    latest_file = max(trc_files, key=os.path.getmtime)
+    return latest_file
+
+def run_pose2sim_triangulation(target_dir):
+
+
+    original_dir = os.getcwd()
+    try:
+        # Change to the desired directory
+        target_directory = target_dir  # Replace with your actual directory path
+        os.chdir(target_directory)
+        Pose2Sim.triangulation()
+
+    finally:
+        # Change back to the original directory
+        os.chdir(original_dir)
 
 
 def calibrate_cameras(openpose_dir, intrinsics_file, segments_file, 
-                      confidence_threshold, output_path, output_filename):
+                      confidence_threshold, trc_file_dir, pose2sim_project_dir, output_path, output_filename):
     """
     Main function to perform hybrid camera calibration.
     
@@ -1406,15 +1376,18 @@ def calibrate_cameras(openpose_dir, intrinsics_file, segments_file,
         )
         
         # Apply scaling to get metric units
-        all_best_results = apply_scale_calibration(
-            all_best_results, final_idx_of_ref_cam, segments_file, Ks, inliers_pair_list
-        )
+        # all_best_results = apply_scale_calibration(
+        #     all_best_results, final_idx_of_ref_cam, segments_file, Ks, inliers_pair_list
+        # )
         
         # Print final optimized results
-        print("\nFinal optimized camera parameters:")
+        print("\nUnitless optimized camera parameters:")
         for pair_key, results in all_best_results.items():
             print(f"Results for {pair_key}:")
             print(f"- t: {results['t']}")
+        
+        # Test
+        print(all_best_results[pair_key]['K1'])
         
         # Write results to TOML file
         write_to_toml(
@@ -1424,7 +1397,32 @@ def calibrate_cameras(openpose_dir, intrinsics_file, segments_file,
             output_path=output_path, 
             output_filename=output_filename
         )
+
+        run_pose2sim_triangulation(pose2sim_project_dir)
+        latest_trc_file = get_latest_trc_file(trc_file_dir)
+
+        # TODO: ADD THE APPLY SCALE FUNCTION HERE
+        scale_factor = calculate_scale_factor(segments_file, latest_trc_file)
+        all_best_results = apply_scale_to_results(all_best_results, scale_factor, final_idx_of_ref_cam)
         
+
+        write_to_toml(
+        all_best_results, 
+        [0.0, 0.0, 0.0], 
+        image_size, 
+        output_path=output_path, 
+        output_filename=output_filename
+        )
+        # Print final optimized results
+        print("\nFinal optimized camera parameters:")
+        for pair_key, results in all_best_results.items():
+            print(f"Results for {pair_key}:")
+            print(f"- t: {results['t']}")
+
+        run_pose2sim_triangulation(pose2sim_project_dir)
+
+        trc_Xup_to_Yup.trc_Xup_to_Yup_func(latest_trc_file, latest_trc_file)
+
         # Calculate and report elapsed time
         end_time = time.time()
         elapsed_time = end_time - start_time

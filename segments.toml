@@ -2,9 +2,9 @@
 # This file defines standard body segment lengths for an average adult
 
 [segments]
-# Full height measurements (from heel to head), height minus the 0.10m which is the average distance of eyes to the top of head
-height_right = { keypoint1 = "RHeel", keypoint2 = "Head", length = 1.75 }
-height_left = { keypoint1 = "LHeel", keypoint2 = "Head", length = 1.75 }
+# Full height measurements (from heel to head), height minus 0.12m which is the average distance of Nose to the top of head
+height_right = { keypoint1 = "RHeel", keypoint2 = "Nose", length = 1.63 }
+height_left = { keypoint1 = "LHeel", keypoint2 = "Nose", length = 1.63 }
 
 # Arm measurements
 arm_upper_right = { keypoint1 = "RShoulder", keypoint2 = "RElbow", length = 0.33 }
@@ -20,4 +20,4 @@ shin_left = { keypoint1 = "LKnee", keypoint2 = "LAnkle", length = 0.43 }
 
 # Torso measurements
 shoulder_width = { keypoint1 = "RShoulder", keypoint2 = "LShoulder", length = 0.41 }
-trunk_length = { keypoint1 = "Neck", keypoint2 = "MidHip", length = 0.53 }
+trunk_length = { keypoint1 = "Neck", keypoint2 = "CHip", length = 0.53 }
