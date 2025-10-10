@@ -1387,7 +1387,7 @@ def calibrate_cameras(openpose_dir, intrinsics_file, segments_file,
             print(f"- t: {results['t']}")
         
         # Test
-        print(all_best_results[pair_key]['K1'])
+        #print(all_best_results[pair_key]['K1'])
         
         # Write results to TOML file
         write_to_toml(
@@ -1420,8 +1420,9 @@ def calibrate_cameras(openpose_dir, intrinsics_file, segments_file,
             print(f"- t: {results['t']}")
 
         run_pose2sim_triangulation(pose2sim_project_dir)
-
+        
         trc_Xup_to_Yup.trc_Xup_to_Yup_func(latest_trc_file, latest_trc_file)
+
 
         # Calculate and report elapsed time
         end_time = time.time()
