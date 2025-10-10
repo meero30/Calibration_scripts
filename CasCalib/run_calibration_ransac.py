@@ -84,7 +84,7 @@ def run_calibration_ransac(datastore, hyperparam_dict, img, img_width, img_heigh
     #     os.mkdir(save_dir + '/plots')
     
     threshold_euc, threshold_cos, angle_filter_video, _, termination_cond, num_points, h, iter, focal_lr, point_lr = util.hyperparameter(hyperparam_dict)
-    
+    # NOTE: Original Angle filter video value is 0.3 in hyperparameter.json
     if img is not None:
         img_width = img.shape[1] #width of image
         img_height = img.shape[0] #height of image

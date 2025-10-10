@@ -23,9 +23,14 @@ v0 = image_size[1] / 2  # principal point v0
 
 #confidence_threshold = 0.7 # used for keypoints filtering
 # Create Path object
+# ROOT_PATH_FOR_ALPHAPOSE_KEYPOINTS = Path(
+#     r"C:\Users\Miro Hernandez\Documents\Pose2sim Calibration Project\CasCalib\Hunminkim_data_alphapose"
+# )
+
 ROOT_PATH_FOR_ALPHAPOSE_KEYPOINTS = Path(
-    r"C:\Users\Miro Hernandez\Documents\Pose2sim Calibration Project\CasCalib\Hunminkim_data_alphapose"
+    r"C:\Users\Miro Hernandez\Documents\Github Projects\Calibration_scripts\CasCalib\pose_alphapose"
 )
+
 # # Create Path objects from command line arguments
 # ROOT_PATH_FOR_ALPHAPOSE_KEYPOINTS = r"C:\Users\Miro Hernandez\Documents\Pose2sim Calibration Project\CasCalib\Hunminkim_data_alphapose"
 

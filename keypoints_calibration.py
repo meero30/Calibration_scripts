@@ -1313,7 +1313,7 @@ def calibrate_cameras(openpose_dir, intrinsics_file, segments_file,
         confidence_threshold (float): Confidence threshold for keypoint filtering.
         output_path (str): Path to save output files.
         output_filename (str): Name of output TOML file.
-        
+        calc_intrinsics_method (str): Method for calculating intrinsics ('default' uses Pose2Sim Checkerboard method, 'CasCalib' uses CasCalib method, 'Custom' user will input an initial estimate f). 
     Returns:
         bool: True if calibration succeeded, False otherwise.
     """
@@ -1350,6 +1350,10 @@ def calibrate_cameras(openpose_dir, intrinsics_file, segments_file,
         
         print("Found directories:", OPENPOSE_KEYPOINTS_DIRECTORY)
         
+
+
+
+
         # Load camera intrinsics from TOML file
         Ks, image_size = load_intrinsics_from_toml(intrinsics_file)
         if Ks is None or image_size is None:
@@ -1421,7 +1425,7 @@ def calibrate_cameras(openpose_dir, intrinsics_file, segments_file,
 
         run_pose2sim_triangulation(pose2sim_project_dir)
         
-        trc_Xup_to_Yup.trc_Xup_to_Yup_func(latest_trc_file, latest_trc_file)
+        trc_Xup_to_Yup.trc_Xup_to_Yup_func(latest_trc_file, None)
 
 
         # Calculate and report elapsed time
