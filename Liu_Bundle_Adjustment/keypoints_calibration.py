@@ -23,16 +23,19 @@ import json
 import glob
 import argparse
 import toml
+import tempfile
+
+
 from pathlib import Path
 from scipy.optimize import least_squares
 import io
 from contextlib import redirect_stdout
-from calculate_scale import calculate_scale_factor
+from Liu_Bundle_Adjustment.calculate_scale import calculate_scale_factor
 from Pose2Sim import Pose2Sim
-import trc_Xup_to_Yup
-
-from keypoints_confidence_multi import extract_paired_keypoints_with_reference
-from write_to_toml import write_to_toml
+from utilities.trc_Xup_to_Yup import trc_Xup_to_Yup_func
+from utilities.OpenPose_to_AlphaPose import OpenPose_to_AlphaPose_func
+from Liu_Bundle_Adjustment.keypoints_confidence_multi import extract_paired_keypoints_with_reference
+from utilities.write_to_toml import write_to_toml
 
 
 def load_json_files(cam_dirs):
@@ -1301,7 +1304,7 @@ def run_pose2sim_triangulation(target_dir):
 
 
 def calibrate_cameras(openpose_dir, intrinsics_file, segments_file, 
-                      confidence_threshold, trc_file_dir, pose2sim_project_dir, output_path, output_filename):
+                      confidence_threshold, trc_file_dir, pose2sim_project_dir, output_path, output_filename, img_width, img_height, calc_intrinsics_method='default'):
     """
     Main function to perform hybrid camera calibration.
     
@@ -1313,6 +1316,8 @@ def calibrate_cameras(openpose_dir, intrinsics_file, segments_file,
         confidence_threshold (float): Confidence threshold for keypoint filtering.
         output_path (str): Path to save output files.
         output_filename (str): Name of output TOML file.
+        img_width (int): Image width in pixels.
+        img_height (int): Image height in pixels.
         calc_intrinsics_method (str): Method for calculating intrinsics ('default' uses Pose2Sim Checkerboard method, 'CasCalib' uses CasCalib method, 'Custom' user will input an initial estimate f). 
     Returns:
         bool: True if calibration succeeded, False otherwise.
@@ -1343,6 +1348,7 @@ def calibrate_cameras(openpose_dir, intrinsics_file, segments_file,
         # Get all OpenPose subdirectories
         OPENPOSE_KEYPOINTS_DIRECTORY = [str(path) for path in ROOT_PATH_FOR_OPENPOSE_KEYPOINTS.glob('*') 
                                        if path.is_dir()]
+        print("OpenPose keypoints directories:", OPENPOSE_KEYPOINTS_DIRECTORY)
         
         if not OPENPOSE_KEYPOINTS_DIRECTORY:
             print(f"No subdirectories found in OpenPose directory: {openpose_dir}")
@@ -1350,20 +1356,49 @@ def calibrate_cameras(openpose_dir, intrinsics_file, segments_file,
         
         print("Found directories:", OPENPOSE_KEYPOINTS_DIRECTORY)
         
+        # TODO: Make a decision tree for intrinsics calculation method
+        if calc_intrinsics_method == 'default':
+            print("Using Pose2Sim Checkerboard method for intrinsics calculation")
+            
+            # Temporary, assumes the current toml file has the intrinsics
+            
+            # Load camera intrinsics from TOML file
+            Ks, _ = load_intrinsics_from_toml(intrinsics_file)
+            if Ks is None:
+                print("Failed to load intrinsics from TOML file")
+                return False
+            
+        elif calc_intrinsics_method == 'CasCalib':
+            print("Using CasCalib method for intrinsics calculation")
+
+            with tempfile.TemporaryDirectory() as temp_dir:
+                print(f"Temporary output folder for alphapose conversion: {temp_dir}")
+
+                # Loop through all OpenPose keypoint directories
+                for i, openpose_dir in enumerate(OPENPOSE_KEYPOINTS_DIRECTORY):
+                    output_file = os.path.join(temp_dir, f"alphapose_results_cam{i+1}.json")
+
+                    # Call the converter function directly
+                    OpenPose_to_AlphaPose_func(openpose_dir, output_file)
+
+                    print(f"Converted: {openpose_dir}")
+                    print(f"Output: {output_file}")
+            
+            # TODO: Call CasCalib function here to get Ks
+            Ks = []  # Placeholder, replace with actual Ks from CasCalib
+
+            ## Call CasCalib function here
+        elif calc_intrinsics_method == 'Custom':
+            print("Using user-provided initial estimate for intrinsics calculation")
 
 
-
-
-        # Load camera intrinsics from TOML file
-        Ks, image_size = load_intrinsics_from_toml(intrinsics_file)
-        if Ks is None or image_size is None:
-            print("Failed to load intrinsics from TOML file")
-            return False
-        
+        print(Ks)
         # Calculate principal points
-        u0 = image_size[0] / 2
-        v0 = image_size[1] / 2
-        
+        u0 = img_width / 2
+        v0 = img_height / 2
+
+        image_size = [img_width, img_height]
+
         print(f"Confidence threshold: {confidence_threshold}")
         
         # Load JSON files from OpenPose directories
@@ -1424,8 +1459,8 @@ def calibrate_cameras(openpose_dir, intrinsics_file, segments_file,
             print(f"- t: {results['t']}")
 
         run_pose2sim_triangulation(pose2sim_project_dir)
-        
-        trc_Xup_to_Yup.trc_Xup_to_Yup_func(latest_trc_file, None)
+
+        trc_Xup_to_Yup_func(latest_trc_file, None)
 
 
         # Calculate and report elapsed time

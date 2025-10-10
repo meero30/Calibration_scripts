@@ -1,6 +1,6 @@
 import numpy as np
 import toml
-from parse_trc_file import trc_file_to_structured_points_3d
+from utilities.parse_trc_file import trc_file_to_structured_points_3d
 
 
 # TODO: TO EDIT TO TRC 21 KEYPOINTS

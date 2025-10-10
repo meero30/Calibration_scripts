@@ -1,4 +1,4 @@
-from keypoints_calibration import calibrate_cameras
+from Liu_Bundle_Adjustment.keypoints_calibration import calibrate_cameras
 
 # result = calibrate_cameras(
 #     openpose_dir=r"C:\Users\Miro Hernandez\Documents\Pose2sim Calibration Project\GaitScape\S01_STRC111_New\P07_paper\T07_Padless\pose",
@@ -32,5 +32,8 @@ result = calibrate_cameras(
     trc_file_dir = r"C:\Users\Miro Hernandez\Documents\GaitScape\S01_STRC111_New\P07_paper\T04_Normal\pose-3d",
     pose2sim_project_dir = r"C:\Users\Miro Hernandez\Documents\GaitScape\S01_STRC111_New\P07_paper\T04_Normal",
     output_path=r"C:\Users\Miro Hernandez\Documents\GaitScape\S01_STRC111_New\P07_paper\calibration",
-    output_filename=r"calibration.toml"
+    output_filename=r"calibration.toml",
+    img_width=480,
+    img_height=640,
+    calc_intrinsics_method='default'
 )
