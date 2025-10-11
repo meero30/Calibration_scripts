@@ -31,14 +31,16 @@ from scipy.optimize import least_squares
 
 
 from contextlib import redirect_stdout
-from Liu_Bundle_Adjustment.calculate_scale import calculate_scale_factor
+
 from CasCalib.run_cascalib import process_alphapose_directory
 from Pose2Sim import Pose2Sim
 from utilities.trc_Xup_to_Yup import trc_Xup_to_Yup_func
 from utilities.OpenPose_to_AlphaPose import OpenPose_to_AlphaPose_func
-from Liu_Bundle_Adjustment.keypoints_confidence_multi import extract_paired_keypoints_with_reference
 from utilities.write_to_toml import write_to_toml
 
+from Liu_Bundle_Adjustment.calculate_scale import calculate_scale_factor
+from Liu_Bundle_Adjustment.keypoints_confidence_multi import extract_paired_keypoints_with_reference
+from Liu_Bundle_Adjustment.normal_bundle_adjustment import bundle_adjustment_refine
 
 def load_json_files(cam_dirs):
     """
@@ -1058,17 +1060,74 @@ def optimize_camera_parameters(final_idx_of_ref_cam, final_camera_Rt, Ks, inlier
     Returns:
         dict: Dictionary of optimized camera parameters.
     """
+
+    print("\n========== DEBUG INFO FOR BUNDLE ADJUSTMENT ==========")
+
+    # 1. Intrinsics
+    print("Number of cameras (Ks):", len(Ks))
+    for i, K in enumerate(Ks):
+        print(f"Camera {i} intrinsic matrix shape: {np.shape(K)}")
+        print(K)
+
+    # 2. Extrinsics (Rotation & Translation)
+    print("\nExtrinsics in final_camera_Rt:")
+    for key, val in final_camera_Rt.items():
+        try:
+            R, t = val
+            print(f"Camera {key}: R shape {np.shape(R)}, t shape {np.shape(t)}")
+            print("R:\n", R)
+            print("t.T:", t.T)
+        except Exception as e:
+            print(f"Camera {key} data not unpacked correctly:", e)
+
+    # 3. Inlier pairs (used for triangulation)
+    print("\nInliers Pair List:")
+    print("Length of inliers_pair_list:", len(inliers_pair_list))
+    if len(inliers_pair_list) > 0:
+        print("Example inlier_pair_list[0] shape:", np.shape(inliers_pair_list[0]))
+        print(inliers_pair_list[0][:5])
+
+    # 4. Inlier secondary list (target 2D detections)
+    print("\nInlier2 List:")
+    print("Length of inlier2_list:", len(inlier2_list))
+    if len(inlier2_list) > 0:
+        print("Example inlier2_list[0] shape:", np.shape(inlier2_list[0]))
+        print(inlier2_list[0][:5])
+
+    # 5. Triangulation sanity check
+    try:
+        example_pair = inliers_pair_list[0]
+        P1 = cam_create_projection_matrix(Ks[0], np.eye(3), np.zeros((3, 1)))
+        P2 = cam_create_projection_matrix(Ks[1], *final_camera_Rt[1])
+        points_3d_test = triangulate_points(example_pair, P1, P2)
+        print("\nTriangulated 3D points shape:", np.shape(points_3d_test))
+        print("Example 3D points:\n", points_3d_test[:5])
+    except Exception as e:
+        print("\nTriangulation test failed:", e)
+
+    print("\n========== END DEBUG INFO ==========\n")
+
+
     # Initialize tolerance parameters for optimization
+    # tolerance_list = {
+    #     'ftol': 1e-3,
+    #     'xtol': 1e-4,
+    #     'gtol': 1e-3,
+    #     'max_nfev': 50,
+    #     'diff_step': 1e-3
+    # }
+
+
     tolerance_list = {
-        'ftol': 1e-3,
-        'xtol': 1e-4,
-        'gtol': 1e-3,
-        'max_nfev': 50,
+        'ftol': 1e-5,
+        'xtol': 1e-5,
+        'gtol': 1e-5,
+        'max_nfev': 1000,
         'diff_step': 1e-3
     }
     
     all_best_results = {}
-    iterations = 1  # Number of intrinsic optimization iterations
+    iterations = 20  # Number of intrinsic optimization iterations
     
     # Fixed reference camera intrinsic matrix
     Fix_K = Ks[final_idx_of_ref_cam]
@@ -1303,10 +1362,213 @@ def run_pose2sim_triangulation(target_dir):
     finally:
         # Change back to the original directory
         os.chdir(original_dir)
+# TODO: REMOVE ONCE MIGRATED
+########## Normal Bundle Adjustment Pipeline ##########
 
+
+def _rodrigues_from_R(R):
+    """R (3x3) -> rvec (3,) using OpenCV"""
+    rvec, _ = cv2.Rodrigues(R.astype(np.float64))
+    return rvec.flatten()
+
+def _R_from_rodrigues(rvec):
+    """rvec (3,) -> R (3x3)"""
+    R, _ = cv2.Rodrigues(rvec.astype(np.float64))
+    return R
+
+def bundle_adjustment_refine(
+    Ks,
+    final_idx_of_ref_cam,
+    final_camera_Rt,
+    inliers_pair_list,
+    inlier2_list,
+    optimize_intrinsics=False,
+    constrained_camera=1,   # <-- translation constraint camera index
+    constraint_weight=1000, # <-- penalty strength for |t|-1
+    max_nfev=200,
+    verbose=1,
+):
+    """
+    Bundle Adjustment refinement with Liu-style |t| = 1 constraint.
+    - Ks: list of 3x3 intrinsic matrices
+    - final_idx_of_ref_cam: reference camera index (fixed)
+    - final_camera_Rt: dict {cam_idx: [R(3x3), t(3x1)]}
+    - inliers_pair_list: list of (N, 2, 2) arrays of corresponding 2D points
+    - inlier2_list: list of (N, 2) arrays of keypoints (used for projection consistency)
+    - optimize_intrinsics: refine fx, fy if True
+    - constrained_camera: which camera’s translation magnitude is constrained to 1
+    - constraint_weight: penalty multiplier for deviation from |t| = 1
+    - Returns refined Ks, Rs, ts, and per-pair 3D points
+    """
+
+    t0 = time.time()
+    num_cameras = len(Ks)
+    pair_camera_idxs = [j for j in range(num_cameras) if j != final_idx_of_ref_cam]
+
+    # Build observation and point lists
+    observations = []
+    points3d_list = []
+    point_base_idx = []
+    global_point_counter = 0
+
+    for p_idx, cam_j in enumerate(pair_camera_idxs):
+        paired = inliers_pair_list[p_idx]
+        K_ref = Ks[final_idx_of_ref_cam]
+        R_ref = np.eye(3)
+        t_ref = np.zeros((3, 1))
+        K_j = Ks[cam_j]
+        R_j, t_j = final_camera_Rt[cam_j]
+
+        # Triangulate
+        P1 = cam_create_projection_matrix(K_ref, R_ref, t_ref)
+        P2 = cam_create_projection_matrix(K_j, R_j, t_j)
+        pts3d_raw = triangulate_points(paired, P1, P2)
+        pts3d = np.array([p.flatten() for p in pts3d_raw], dtype=np.float64)
+
+        n_pts = pts3d.shape[0]
+        points3d_list.append(pts3d)
+        point_base_idx.append(global_point_counter)
+
+        for i_pt in range(n_pts):
+            u1, v1 = paired[i_pt][0]
+            u2, v2 = paired[i_pt][1]
+            observations.append((final_idx_of_ref_cam, global_point_counter + i_pt, float(u1), float(v1)))
+            observations.append((cam_j, global_point_counter + i_pt, float(u2), float(v2)))
+        global_point_counter += n_pts
+
+    total_points = global_point_counter
+    if verbose:
+        print(f"[BA] {len(pair_camera_idxs)} pairs, {total_points} points, {len(observations)} observations")
+
+    # --- Build parameter vector ---
+    cam_var_index = {}
+    param_list = []
+    for cam in range(num_cameras):
+        if cam == final_idx_of_ref_cam:
+            cam_var_index[cam] = None
+            continue
+        R, t = final_camera_Rt[cam]
+        rvec = _rodrigues_from_R(R)
+        tvec = t.flatten()
+        if optimize_intrinsics:
+            fx, fy = Ks[cam][0, 0], Ks[cam][1, 1]
+            cam_block = np.hstack([rvec, tvec, [fx, fy]])
+        else:
+            cam_block = np.hstack([rvec, tvec])
+        cam_var_index[cam] = len(param_list)
+        param_list.append(cam_block)
+    cam_param_vec = np.hstack(param_list) if param_list else np.array([])
+
+    pts_vec = np.hstack([pts.flatten() for pts in points3d_list]) if total_points > 0 else np.array([])
+    x0 = np.hstack([cam_param_vec, pts_vec]).astype(np.float64)
+
+    def unpack_params(x):
+        cams = {}
+        offset = 0
+        for cam in range(num_cameras):
+            if cam == final_idx_of_ref_cam:
+                cams[cam] = {'rvec': np.zeros(3), 't': np.zeros(3), 'K': Ks[cam].copy()}
+                continue
+            if optimize_intrinsics:
+                block = x[offset : offset + 8]
+                rvec, tvec, fx, fy = block[:3], block[3:6], block[6], block[7]
+                offset += 8
+                Kcam = Ks[cam].copy()
+                Kcam[0, 0], Kcam[1, 1] = fx, fy
+            else:
+                block = x[offset : offset + 6]
+                rvec, tvec = block[:3], block[3:6]
+                offset += 6
+                Kcam = Ks[cam].copy()
+            cams[cam] = {'rvec': rvec, 't': tvec, 'K': Kcam}
+        pts = x[offset:].reshape(-1, 3) if total_points > 0 else np.zeros((0, 3))
+        return cams, pts
+
+    # --- Residual computation ---
+    def residuals(x):
+        cams, pts = unpack_params(x)
+        res = []
+
+        # Reprojection residuals
+        for obs in observations:
+            cam_idx, pid, u_obs, v_obs = obs
+            camp = cams[cam_idx]
+            Kcam = camp['K']
+            if cam_idx == final_idx_of_ref_cam:
+                Rmat, tvec = np.eye(3), np.zeros(3)
+            else:
+                Rmat = _R_from_rodrigues(camp['rvec'])
+                tvec = camp['t']
+            X = pts[pid]
+            Xc = Rmat @ X + tvec
+            if Xc[2] == 0:
+                Xc[2] += 1e-12
+            uv = Kcam @ Xc
+            u_proj, v_proj = uv[0] / uv[2], uv[1] / uv[2]
+            res.append(u_proj - u_obs)
+            res.append(v_proj - v_obs)
+
+        # Liu-style |t| = 1 constraint
+        if constrained_camera in cams:
+            tvec = cams[constrained_camera]['t']
+            t_norm = np.linalg.norm(tvec)
+            constraint = constraint_weight * (t_norm - 1.0)
+            res.append(constraint)
+
+        return np.array(res, dtype=np.float64)
+
+    # --- Optimization ---
+    if verbose:
+        print("[BA] Starting optimization with |t|=1 constraint")
+
+    lsq_result = least_squares(
+        residuals,
+        x0,
+        method="trf",
+        jac="2-point",
+        verbose=1,
+        max_nfev=max_nfev,
+        ftol=1e-5,
+        xtol=1e-5,
+        gtol=1e-5,
+        loss="huber",
+        diff_step=1e-3,
+    )
+
+    cams_final, pts_final = unpack_params(lsq_result.x)
+
+    refined_Ks = [K.copy() for K in Ks]
+    refined_Rs, refined_ts = {}, {}
+    for cam in range(num_cameras):
+        camp = cams_final[cam]
+        refined_Ks[cam] = camp["K"]
+        Rm = _R_from_rodrigues(camp["rvec"])
+        tm = camp["t"].reshape(3, 1)
+        refined_Rs[cam] = Rm
+        refined_ts[cam] = tm
+
+    # Split points per pair
+    refined_points_per_pair = []
+    for idx, base in enumerate(point_base_idx):
+        npts = points3d_list[idx].shape[0]
+        seg = pts_final[base : base + npts, :]
+        refined_points_per_pair.append(seg.copy())
+
+    t1 = time.time()
+    if verbose:
+        print(f"[BA] Done in {t1 - t0:.1f}s | success={lsq_result.success}")
+        print(f"[BA] Initial residual norm: {np.linalg.norm(residuals(x0)):.3f}")
+        print(f"[BA] Final residual norm:   {np.linalg.norm(residuals(lsq_result.x)):.3f}")
+        print(f"[BA] Translation constraint camera {constrained_camera} final |t| = {np.linalg.norm(refined_ts[constrained_camera]):.4f}")
+
+    return refined_Ks, refined_Rs, refined_ts, refined_points_per_pair
+
+
+
+######### End of Normal Bundle Adjustment Pipeline ##########
 
 def calibrate_cameras(openpose_dir, intrinsics_file, segments_file, 
-                      confidence_threshold, trc_file_dir, pose2sim_project_dir, output_path, output_filename, img_width, img_height, calc_intrinsics_method='default'):
+                      confidence_threshold, trc_file_dir, pose2sim_project_dir, output_path, output_filename, img_width, img_height, calc_intrinsics_method='default', optimization_method='Liu'):
     """
     Main function to perform hybrid camera calibration.
     
@@ -1419,11 +1681,62 @@ def calibrate_cameras(openpose_dir, intrinsics_file, segments_file,
             all_cam_data, OPENPOSE_KEYPOINTS_DIRECTORY, Ks, confidence_threshold
         )
         
+        if optimization_method == 'Liu':
         # Optimize camera parameters
-        all_best_results = optimize_camera_parameters(
-            final_idx_of_ref_cam, final_camera_Rt, Ks, inliers_pair_list, inlier2_list, constrained_camera
-        )
-        
+            all_best_results = optimize_camera_parameters(
+                final_idx_of_ref_cam, final_camera_Rt, Ks, inliers_pair_list, inlier2_list, constrained_camera
+            )
+        elif optimization_method == 'BundleAdjustment':
+            # --- Subsample points for faster BA ---
+            max_points = 200  # adjust as needed
+
+            for i in range(len(inliers_pair_list)):
+                pts = np.asarray(inliers_pair_list[i])
+                if pts.shape[0] > max_points:
+                    idx = np.random.choice(pts.shape[0], max_points, replace=False)
+                    inliers_pair_list[i] = pts[idx]
+                    if isinstance(inlier2_list[i], (list, np.ndarray)):
+                        inlier2_list[i] = np.asarray(inlier2_list[i])[idx]
+            
+            refined_Ks, refined_Rs, refined_ts, _ = bundle_adjustment_refine(
+                Ks,
+                final_idx_of_ref_cam,
+                final_camera_Rt,
+                inliers_pair_list,
+                inlier2_list,
+                optimize_intrinsics=True,
+                constrained_camera=constrained_camera,
+                constraint_weight=1000,
+                max_nfev=100,
+                verbose=1,
+            )
+            # Build all_best_results from BA outputs
+            all_best_results = {}
+            ref_cam = final_idx_of_ref_cam  # e.g., 0
+
+            for j in range(len(refined_Ks)):
+                if j == ref_cam:
+                    continue  # skip reference camera
+                
+                pair_key = f"Camera{ref_cam}_{j}"
+                all_best_results[pair_key] = {
+                    "K1": refined_Ks[ref_cam],
+                    "K2": refined_Ks[j],
+                    "R": refined_Rs[j],
+                    "t": refined_ts[j].flatten(),   # flatten to 1D like in your example
+                    "error": np.float64(0.0)        # placeholder if you don’t compute reprojection error
+                }
+
+            print("\nPackaged all_best_results for TOML export:")
+            for key, val in all_best_results.items():
+                print(f"{key}:")
+                print("K1:\n", val["K1"])
+                print("K2:\n", val["K2"])
+                print("R:\n", val["R"])
+                print("t:", val["t"])
+
+        print("All best results:", all_best_results)
+
         # Apply scaling to get metric units
         # all_best_results = apply_scale_calibration(
         #     all_best_results, final_idx_of_ref_cam, segments_file, Ks, inliers_pair_list

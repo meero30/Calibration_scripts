@@ -36,4 +36,5 @@ result = calibrate_cameras(
     img_width=480,
     img_height=640,
     calc_intrinsics_method='CasCalib',
+    optimization_method="BundleAdjustment",
 )
