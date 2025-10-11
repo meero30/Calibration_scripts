@@ -1,10 +1,11 @@
 
 import json
 from datetime import datetime
-from run_calibration_ransac import run_calibration_ransac
-import data
+from CasCalib import run_calibration_ransac, data
 
-def get_simplified_cam_params(camera_names, DATA_PATHS, img_width, img_height):
+
+
+def get_simplified_cam_params(camera_names, DATA_PATHS, img_width, img_height, confidence=0.7):
     today = datetime.now()
     name = str(today.strftime('%Y%m%d_%H%M%S')) + '_custom_calibration'
     
@@ -22,10 +23,10 @@ def get_simplified_cam_params(camera_names, DATA_PATHS, img_width, img_height):
         # Get calibration data
         datastore_cal = data.alphapose_dataloader(points_2d)
         (ankles, cam_matrix, normal, ankleWorld, focal, focal_batch, 
-         ransac_focal, datastore_filtered) = run_calibration_ransac(
+         ransac_focal, datastore_filtered) = run_calibration_ransac.run_calibration_ransac(
             datastore_cal, 'hyperparameter.json', None,
             img_width, img_height, 
-            confidence=0.7,
+            confidence=confidence,
             skip_frame=1, # use every frame
             max_len=10000,
             min_size=10,

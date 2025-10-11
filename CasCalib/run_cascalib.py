@@ -2,59 +2,77 @@
 import time
 
 #from my_bundle_adjustment import CustomBundleAdjustment
-from Get_Intrinsics import get_simplified_cam_params
+from CasCalib.Get_Intrinsics import get_simplified_cam_params
 start_time = time.time()
 #from write_to_toml import write_to_toml
 from pathlib import Path
-import glob
-import argparse
 
 
 
+def process_alphapose_directory(img_width, img_height, alphapose_dir, confidence):
+    """
+    Processes AlphaPose JSON files to extract camera names and simplified intrinsics.
 
+    Parameters
+    ----------
+    img_width : int
+        Image width in pixels.
+    img_height : int
+        Image height in pixels.
+    alphapose_dir : str or Path
+        Path to the directory containing AlphaPose JSON keypoint files. Each file corresponds to a different camera.
 
-# Use the parsed arguments
-img_width = 480
-img_height = 640
-image_size = [img_width, img_height]
+    Returns
+    -------
+    cam_intrinsics_array : any
+        The camera intrinsics array returned by get_simplified_cam_params().
 
-u0 = image_size[0] / 2  # principal point u0
-v0 = image_size[1] / 2  # principal point v0
+        Example Output:
+        cam_intrinsics_array =            
+        [
+            array([[492.70615785,   0.        , 240.        ],
+                    [  0.        , 492.70615785, 320.        ],
+                    [  0.        ,   0.        ,   1.        ]]),
+            array([[366.37723903,   0.        , 240.        ],
+                    [  0.        , 366.37723903, 320.        ],
+                    [  0.        ,   0.        ,   1.        ]]),
+            array([[595.31194042,   0.        , 240.        ],
+                    [  0.        , 595.31194042, 320.        ],
+                    [  0.        ,   0.        ,   1.        ]])
+            ]
 
-#confidence_threshold = 0.7 # used for keypoints filtering
-# Create Path object
-# ROOT_PATH_FOR_ALPHAPOSE_KEYPOINTS = Path(
-#     r"C:\Users\Miro Hernandez\Documents\Pose2sim Calibration Project\CasCalib\Hunminkim_data_alphapose"
-# )
+    camera_names : list
+        List of camera names derived from JSON filenames.
+    data_paths : dict
+        Dictionary with key 'detections' mapping to full JSON file paths.
+    """
+    
+    # Convert to Path object
+    alphapose_dir = Path(alphapose_dir)
 
-ROOT_PATH_FOR_ALPHAPOSE_KEYPOINTS = Path(
-    r"C:\Users\Miro Hernandez\Documents\Github Projects\Calibration_scripts\CasCalib\pose_alphapose"
-)
+    # Principal point (center of the image)
+    u0 = img_width / 2
+    v0 = img_height / 2
 
-# # Create Path objects from command line arguments
-# ROOT_PATH_FOR_ALPHAPOSE_KEYPOINTS = r"C:\Users\Miro Hernandez\Documents\Pose2sim Calibration Project\CasCalib\Hunminkim_data_alphapose"
+    # Find all JSON files in directory
+    json_files = list(alphapose_dir.glob('*.json'))
+    if not json_files:
+        raise FileNotFoundError(f"No JSON files found in directory: {alphapose_dir}")
 
+    # Extract camera names (filenames without extension)
+    camera_names = [file_path.stem for file_path in json_files]
 
-# Find all JSON files
-json_files = list(ROOT_PATH_FOR_ALPHAPOSE_KEYPOINTS.glob('*.json'))
+    # Create DATA_PATHS dictionary
+    DATA_PATHS = {'detections': json_files}
 
-# Extract camera names from filenames (just the base filename without extension)
-camera_names = [file_path.stem for file_path in json_files]
+    # Print debug info
+    print("Camera Names:", camera_names)
+    print("\nDetection Paths:")
+    for path in DATA_PATHS['detections']:
+        print(path)
 
+    cam_intrinsics_array = get_simplified_cam_params(camera_names, DATA_PATHS, img_width, img_height, confidence)
 
-# Create DATA_PATHS (full paths to all JSON files)
-DATA_PATHS = {
-    'detections': json_files
-}
+    print("\nCamera Intrinsics Array:", cam_intrinsics_array)
 
-# Print to verify
-print("Camera Names:", camera_names)
-print("\nDetection Paths:")
-for path in DATA_PATHS['detections']:
-    print(path)
-
-
-
-
-cam_intrinsics_array = get_simplified_cam_params(camera_names, DATA_PATHS, img_width, img_height)
-print("Camera Intrinsics Array:", cam_intrinsics_array)
+    return cam_intrinsics_array

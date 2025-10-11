@@ -35,5 +35,5 @@ result = calibrate_cameras(
     output_filename=r"calibration.toml",
     img_width=480,
     img_height=640,
-    calc_intrinsics_method='default'
+    calc_intrinsics_method='CasCalib',
 )

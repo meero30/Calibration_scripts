@@ -1,5 +1,5 @@
 import numpy as np
-import data
+from CasCalib import data
 from scipy import special
 import random as rand
 import json

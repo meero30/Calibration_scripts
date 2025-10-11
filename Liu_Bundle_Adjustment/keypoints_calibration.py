@@ -5,7 +5,7 @@ This script is for calibration. Inputs would be the precalculated intrinsics val
 The output is a calibration toml file with the calculated extrinsics value.
 The original script is based on Mr. Hunminkim's implementation of Liu's paper with some added as suggested by Dr. Pagnon.  
 List of things TODO
-1. Translate plane into -x
+1. Translate plane into -x // DONE
 2. Create a callback function that saves the best extrinsics values (there might've been better local minima passed)
 3. Integrate an option for CasCalib's estimation of intrinsic values or Find another good estimate of intrinsic values
 """
@@ -28,9 +28,11 @@ import tempfile
 
 from pathlib import Path
 from scipy.optimize import least_squares
-import io
+
+
 from contextlib import redirect_stdout
 from Liu_Bundle_Adjustment.calculate_scale import calculate_scale_factor
+from CasCalib.run_cascalib import process_alphapose_directory
 from Pose2Sim import Pose2Sim
 from utilities.trc_Xup_to_Yup import trc_Xup_to_Yup_func
 from utilities.OpenPose_to_AlphaPose import OpenPose_to_AlphaPose_func
@@ -1383,19 +1385,27 @@ def calibrate_cameras(openpose_dir, intrinsics_file, segments_file,
 
                     print(f"Converted: {openpose_dir}")
                     print(f"Output: {output_file}")
+                # TODO: Call CasCalib function here to get Ks
+                ROOT_PATH_FOR_ALPHAPOSE_KEYPOINTS = Path(temp_dir)
+
+                Ks = process_alphapose_directory(img_width, img_height, ROOT_PATH_FOR_ALPHAPOSE_KEYPOINTS, confidence_threshold)
             
-            # TODO: Call CasCalib function here to get Ks
-            Ks = []  # Placeholder, replace with actual Ks from CasCalib
-
-            ## Call CasCalib function here
+            
+            if Ks is None:
+                print("Failed to calculate intrinsics using CasCalib method")
+                return False
+            
+        
         elif calc_intrinsics_method == 'Custom':
+
+            #TODO: Implement custom intrinsics calculation method
             print("Using user-provided initial estimate for intrinsics calculation")
+            # Not yet implemented, skipping for now
+            print("Custom intrinsics calculation method is not yet implemented")
+            return False
 
 
-        print(Ks)
-        # Calculate principal points
-        u0 = img_width / 2
-        v0 = img_height / 2
+        print("Intrinsic Parameters:", Ks)
 
         image_size = [img_width, img_height]
 

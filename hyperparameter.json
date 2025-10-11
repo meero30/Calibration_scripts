@@ -1,6 +1,6 @@
 {"threshold_euc": 0.05,
 "threshold_cos": 0.05,
-"angle_filter_video": 4,
+"angle_filter_video": 3.5,
 "confidence": 0.80,
 "termination_cond": 20000.0,
 "num_points": 3,
