@@ -7,7 +7,7 @@ The original script is based on Mr. Hunminkim's implementation of Liu's paper wi
 List of things TODO
 1. Translate plane into -x // DONE
 2. Create a callback function that saves the best extrinsics values (there might've been better local minima passed)
-3. Integrate an option for CasCalib's estimation of intrinsic values or Find another good estimate of intrinsic values
+3. Find another good estimate of intrinsic values
 """
 
 
@@ -1351,6 +1351,7 @@ def optimize_camera_parameters(final_idx_of_ref_cam, final_camera_Rt, Ks, inlier
     MAX_ITERATIONS = 100
     iteration = 0
     
+    # Doesnt have any history of all calculated extrinsics, only keeps updating the last best result
     while True:
         total_error = 0
         temp_idx = -1
@@ -1493,6 +1494,7 @@ def run_pose2sim_triangulation(target_dir):
 
     finally:
         # Change back to the original directory
+
         os.chdir(original_dir)
 # TODO: REMOVE ONCE MIGRATED
 ########## Normal Bundle Adjustment Pipeline ##########
@@ -1917,18 +1919,24 @@ def calibrate_cameras(openpose_dir, intrinsics_file, segments_file,
                     Ks_new[i] = Ks_original[i].copy()
 
             Ks = Ks_new
-            
+
             # BA refinement
             max_points = 200  # adjust as needed
 
             for i in range(len(inliers_pair_list)):
                 pts = np.asarray(inliers_pair_list[i])
-                if pts.shape[0] > max_points:
-                    idx = np.random.choice(pts.shape[0], max_points, replace=False)
-                    inliers_pair_list[i] = pts[idx]
-                    if isinstance(inlier2_list[i], (list, np.ndarray)):
-                        inlier2_list[i] = np.asarray(inlier2_list[i])[idx]
-                        
+
+                # skip if points are fewer than or equal to max_points
+                if pts.shape[0] <= max_points:
+                    continue
+
+                # downsample if more than max_points
+                idx = np.random.choice(pts.shape[0], max_points, replace=False)
+                inliers_pair_list[i] = pts[idx]
+
+                if isinstance(inlier2_list[i], (list, np.ndarray)):
+                    inlier2_list[i] = np.asarray(inlier2_list[i])[idx]
+
             print("Stop")
             refined_Ks, refined_Rs, refined_ts, _ = bundle_adjustment_refine(
                 Ks,
