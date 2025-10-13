@@ -1,5 +1,39 @@
 import os
-import json
+from Pose2Sim import Pose2Sim
+
+
+# Move to Data_transformations_helper.py file
+def create_paired_inlier(inliers1, inliers2):
+    """
+    Creates a list of paired inliers.
+
+    Args:
+        inliers1 (numpy.ndarray): Array of inlier points from camera 1.
+        inliers2 (numpy.ndarray): Array of inlier points from camera 2.
+
+    Returns:
+        list: List of tuples, where each tuple contains paired points (tuples), 
+              where each sub-tuple is a point (x, y) from camera 1 and camera 2 respectively.
+    """
+    paired_inliers = [((p1[0], p1[1]), (p2[0], p2[1])) for p1, p2 in zip(inliers1, inliers2)]
+    return paired_inliers
+
+
+
+def run_pose2sim_triangulation(target_dir):
+
+
+    original_dir = os.getcwd()
+    try:
+        # Change to the desired directory
+        target_directory = target_dir  # Replace with your actual directory path
+        os.chdir(target_directory)
+        Pose2Sim.triangulation()
+
+    finally:
+        # Change back to the original directory
+
+        os.chdir(original_dir)
 
 
 
@@ -69,7 +103,6 @@ import json
 #             print("Warning: Faulty JSON files found for frames:", index_of_faulty_json)
 #         # break
 #     return all_paired_keypoints
-
 
 
 def extract_paired_keypoints_with_reference(all_cam_data, index_of_ref, confidence_threshold):

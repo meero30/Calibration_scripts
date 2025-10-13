@@ -120,7 +120,7 @@ def compute_scale_factor_from_segments(structured_points_3d, known_segments):
     else:
         print("No valid scale factors could be computed")
         return None
-    
+
 def load_segments_from_toml(toml_file):
     """
     Load known body segments from a TOML file. Based on Dr. David Pagnon's algorithm.
@@ -234,3 +234,62 @@ def calculate_scale_factor( segments_file, trc_file):
         scale_factor = 1.0
     return scale_factor
     
+
+
+
+# def apply_scale_to_results(all_best_results, scale_factor, ref_cam_idx):
+#     """
+#     Apply absolute scale to camera parameters by scaling only the z-component 
+#     of the translation vectors (Tz), leaving Tx and Ty unchanged.
+    
+#     Args:
+#         all_best_results (dict): Dictionary containing camera calibration results.
+#         scale_factor (float): Scale factor to convert to metric units.
+#         ref_cam_idx (int): Index of reference camera.
+        
+#     Returns:
+#         dict: Updated calibration results with the z-component scaled.
+#     """
+#     scaled_results = {}
+    
+#     for pair_key, params in all_best_results.items():
+#         scaled_results[pair_key] = params.copy()
+        
+#         # Scale translation vectors for all cameras except the reference
+#         if pair_key.startswith(f"Camera{ref_cam_idx}_"):
+#             t = np.array(params['t'])  # ensure it's a numpy array
+#             # Only scale the z component (index 2)
+#             t[2] = t[2] * scale_factor
+#             scaled_results[pair_key]['t'] = t
+            
+#     return scaled_results
+
+
+def apply_scale_to_results(all_best_results, scale_factor, ref_cam_idx):
+    """
+    Apply absolute scale to camera parameters by scaling all components
+    of the translation vectors uniformly (tx, ty, tz).
+    
+    Args:
+        all_best_results (dict): Dictionary containing camera calibration results.
+        scale_factor (float): Scale factor to convert to metric units.
+        ref_cam_idx (int): Index of reference camera.
+        
+    Returns:
+        dict: Updated calibration results with scaled translations.
+    """
+    scaled_results = {}
+    
+    for pair_key, params in all_best_results.items():
+        scaled_results[pair_key] = params.copy()
+        
+        # Skip pairs that don't involve the reference camera
+        if f"Camera{ref_cam_idx}" not in pair_key:
+            continue
+            
+        # Scale the entire translation vector uniformly
+        t = np.array(params['t'])  # ensure it's a numpy array
+        t = t * scale_factor
+        scaled_results[pair_key]['t'] = t
+            
+    return scaled_results
