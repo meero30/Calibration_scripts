@@ -46,31 +46,62 @@ from Calibration.calculate_scale import calculate_scale_factor, apply_scale_to_r
 
 
 
-def calibrate_cameras(openpose_dir, intrinsics_file, segments_file, 
-                      confidence_threshold, trc_file_dir, pose2sim_project_dir, output_path, output_filename, img_width, img_height, calc_intrinsics_method='default', optimization_method='Liu'):
+def calibrate_cameras(path_to_openpose_keypoints_dir, path_to_segments_file, 
+                      confidence_threshold_keypoints,  path_to_pose2sim_project_dir, output_filename, img_width, img_height, calc_intrinsics_method='default', optimization_method='Liu', path_to_intrinsics_file=None, confidence_threshold_cascalib=0.7):
     """
-    Main function to perform hybrid camera calibration.
-    
+    Perform hybrid camera calibration using 2D keypoints, 3D markers, and segment definitions.
+
     Args:
-        alphapose_dir (str): Path to AlphaPose keypoints directory. Temporarily removed
-        openpose_dir (str): Path to OpenPose keypoints directory.
-        intrinsics_file (str): Path to TOML file with intrinsic parameters.
-        segments_file (str): Path to TOML file with segment definitions.
-        confidence_threshold (float): Confidence threshold for keypoint filtering.
-        output_path (str): Path to save output files.
-        output_filename (str): Name of output TOML file.
-        img_width (int): Image width in pixels.
-        img_height (int): Image height in pixels.
-        calc_intrinsics_method (str): Method for calculating intrinsics ('default' uses Pose2Sim Checkerboard method, 'CasCalib' uses CasCalib method, 'Custom' user will input an initial estimate f). 
+        path_to_openpose_keypoints_dir (str): 
+            Path to the directory containing 2D keypoints estimated by OpenPose for all cameras.
+            Each subfolder should correspond to a camera, containing per-frame JSON.
+
+        path_to_intrinsics_file (str): 
+            Path to the TOML file containing intrinsic camera parameters (if available). 
+            If None, intrinsics will be estimated using the method specified by `calc_intrinsics_method`. #TODO: Implement intrinsics estimation if file is None.
+
+        path_to_segments_file (str): 
+            Path to the TOML file defining the body segment connections used for skeleton modeling.
+
+        confidence_threshold_keypoints (float): 
+            Minimum keypoint confidence score required to include a 2D observation in calibration for 2-stage calibration calculations.
+
+        path_to_pose2sim_project_dir (str): 
+            Path to the Pose2Sim project root directory (contains folders like `pose-2d`, `pose-3d`, and `calibration`).
+
+        output_filename (str): 
+            Name of the TOML file where the final calibration parameters will be saved.
+
+        img_width (int): 
+            Image width in pixels for the camera frames.
+
+        img_height (int): 
+            Image height in pixels for the camera frames.
+
+        calc_intrinsics_method (str, optional): 
+            Method for calculating intrinsic parameters:
+            - `'default'`: Uses Pose2Sim’s checkerboard-based calibration (standard method).
+            - `'CasCalib'`: Uses CasCalib algorithm for intrinsic estimation.
+            - `'Custom'`: Uses user-provided initial focal length or parameters.
+
+        optimization_method (str, optional): 
+            Extrinsic optimization strategy:
+            - `'Liu'`: Single-stage Liu et al. method.
+            - `'Combined'`: Hybrid optimization combining multiple refinement stages (recommended).
+
+        confidence_threshold_cascalib (float, optional): 
+            Confidence threshold used specifically for CasCalib-based intrinsic estimation.
+
     Returns:
         bool: True if calibration succeeded, False otherwise.
     """
+
     start_time = time.time()
     
     try:
         # Create Path objects
         # ROOT_PATH_FOR_ALPHAPOSE_KEYPOINTS = Path(alphapose_dir)
-        ROOT_PATH_FOR_OPENPOSE_KEYPOINTS = Path(openpose_dir)
+        ROOT_PATH_FOR_OPENPOSE_KEYPOINTS = Path(path_to_openpose_keypoints_dir)
         
         # Find all JSON files
         # json_files = list(ROOT_PATH_FOR_ALPHAPOSE_KEYPOINTS.glob('*.json'))
@@ -94,7 +125,7 @@ def calibrate_cameras(openpose_dir, intrinsics_file, segments_file,
         print("OpenPose keypoints directories:", OPENPOSE_KEYPOINTS_DIRECTORY)
         
         if not OPENPOSE_KEYPOINTS_DIRECTORY:
-            print(f"No subdirectories found in OpenPose directory: {openpose_dir}")
+            print(f"No subdirectories found in OpenPose directory: {path_to_openpose_keypoints_dir}")
             return False
         
         print("Found directories:", OPENPOSE_KEYPOINTS_DIRECTORY)
@@ -106,7 +137,7 @@ def calibrate_cameras(openpose_dir, intrinsics_file, segments_file,
             # Temporary, assumes the current toml file has the intrinsics
             
             # Load camera intrinsics from TOML file
-            Ks, _ = load_intrinsics_from_toml(intrinsics_file)
+            Ks, _ = load_intrinsics_from_toml(path_to_intrinsics_file)
             if Ks is None:
                 print("Failed to load intrinsics from TOML file")
                 return False
@@ -118,18 +149,18 @@ def calibrate_cameras(openpose_dir, intrinsics_file, segments_file,
                 print(f"Temporary output folder for alphapose conversion: {temp_dir}")
 
                 # Loop through all OpenPose keypoint directories
-                for i, openpose_dir in enumerate(OPENPOSE_KEYPOINTS_DIRECTORY):
+                for i, path_to_openpose_keypoints_dir in enumerate(OPENPOSE_KEYPOINTS_DIRECTORY):
                     output_file = os.path.join(temp_dir, f"alphapose_results_cam{i+1}.json")
 
                     # Call the converter function directly
-                    OpenPose_to_AlphaPose_func(openpose_dir, output_file)
+                    OpenPose_to_AlphaPose_func(path_to_openpose_keypoints_dir, output_file)
 
-                    print(f"Converted: {openpose_dir}")
+                    print(f"Converted: {path_to_openpose_keypoints_dir}")
                     print(f"Output: {output_file}")
                 # TODO: Call CasCalib function here to get Ks
                 ROOT_PATH_FOR_ALPHAPOSE_KEYPOINTS = Path(temp_dir)
 
-                Ks = process_alphapose_directory(img_width, img_height, ROOT_PATH_FOR_ALPHAPOSE_KEYPOINTS, confidence_threshold)
+                Ks = process_alphapose_directory(img_width, img_height, ROOT_PATH_FOR_ALPHAPOSE_KEYPOINTS, confidence_threshold_cascalib)
             
             
             if Ks is None:
@@ -150,14 +181,14 @@ def calibrate_cameras(openpose_dir, intrinsics_file, segments_file,
 
         image_size = [img_width, img_height]
 
-        print(f"Confidence threshold: {confidence_threshold}")
+        print(f"Confidence threshold keypoints: {confidence_threshold_keypoints}")
         
         # Load JSON files from OpenPose directories
         all_cam_data = load_json_files(OPENPOSE_KEYPOINTS_DIRECTORY)
         
         # Select the best reference camera
         final_idx_of_ref_cam, constrained_camera, paired_keypoints_list, inliers_pair_list, inlier2_list, final_camera_Rt = select_reference_camera(
-            all_cam_data, OPENPOSE_KEYPOINTS_DIRECTORY, Ks, confidence_threshold
+            all_cam_data, OPENPOSE_KEYPOINTS_DIRECTORY, Ks, confidence_threshold_keypoints
         )
         
         if optimization_method == 'Liu':
@@ -336,21 +367,22 @@ def calibrate_cameras(openpose_dir, intrinsics_file, segments_file,
         
         # Test
         #print(all_best_results[pair_key]['K1'])
-        
+        output_path_calibration = os.path.join(path_to_pose2sim_project_dir, 'calibration')
         # Write results to TOML file
         write_to_toml(
             all_best_results, 
             [0.0, 0.0, 0.0], 
             image_size, 
-            output_path=output_path, 
+            output_path=output_path_calibration, 
             output_filename=output_filename
         )
 
-        run_pose2sim_triangulation(pose2sim_project_dir)
+        run_pose2sim_triangulation(path_to_pose2sim_project_dir)
+        trc_file_dir = os.path.join(path_to_pose2sim_project_dir, 'pose-3d')
         latest_trc_file = get_latest_trc_file(trc_file_dir)
 
         # TODO: ADD THE APPLY SCALE FUNCTION HERE
-        scale_factor = calculate_scale_factor(segments_file, latest_trc_file)
+        scale_factor = calculate_scale_factor(path_to_segments_file, latest_trc_file)
         all_best_results = apply_scale_to_results(all_best_results, scale_factor, final_idx_of_ref_cam)
         
 
@@ -358,7 +390,7 @@ def calibrate_cameras(openpose_dir, intrinsics_file, segments_file,
         all_best_results, 
         [0.0, 0.0, 0.0], 
         image_size, 
-        output_path=output_path, 
+        output_path=output_path_calibration, 
         output_filename=output_filename
         )
         # Print final optimized results
@@ -367,7 +399,7 @@ def calibrate_cameras(openpose_dir, intrinsics_file, segments_file,
             print(f"Results for {pair_key}:")
             print(f"- t: {results['t']}")
 
-        run_pose2sim_triangulation(pose2sim_project_dir)
+        run_pose2sim_triangulation(path_to_pose2sim_project_dir)
 
         trc_Xup_to_Yup_func(latest_trc_file, None)
 
@@ -392,20 +424,52 @@ def main():
     """
     parser = argparse.ArgumentParser(description='Hybrid camera calibration from keypoints')
     
-    parser.add_argument('--alphapose_dir', type=str, default=".", 
-                        help='Path to the Alphapose keypoints directory')
-    parser.add_argument('--openpose_dir', type=str, required=True, 
-                        help='Path to the Openpose keypoints directory')
-    parser.add_argument('--intrinsics_file', type=str, required=True,
-                        help='Path to TOML file with camera intrinsic parameters')
-    parser.add_argument('--segments_file', type=str, default=None,
-                        help='Path to TOML file with body segment definitions')
-    parser.add_argument('--confidence', type=float, default=0.7,
-                        help='Confidence threshold for keypoints (default: 0.7)')
-    parser.add_argument('--output_path', type=str, default=".",
-                        help='Path to the output directory (default: current directory)')
+
+    parser.add_argument('--path_to_openpose_keypoints_dir', type=str, required=True,
+                        help='Path to the directory containing 2D keypoints estimated by OpenPose for all cameras.')
+
+    parser.add_argument('--path_to_intrinsics_file', type=str, required=True,
+                        help='Path to the TOML file containing camera intrinsic parameters. If not provided, intrinsics will be estimated.')
+
+    parser.add_argument('--path_to_segments_file', type=str, required=True,
+                        help='Path to the TOML file defining body segment connections for the skeleton model.')
+
+    parser.add_argument('--confidence_threshold', type=float, default=0.7,
+                        help='Minimum keypoint confidence score for including 2D observations in calibration (default: 0.7).')
+
+    parser.add_argument('--path_to_trc_file_dir', type=str, required=True,
+                        help='Path to the directory containing .trc files (3D trajectories) used for extrinsic calibration.')
+
+    parser.add_argument('--path_to_pose2sim_project_dir', type=str, required=True,
+                        help='Path to the Pose2Sim project root directory containing pose-2d, pose-3d, and calibration folders.')
+
+    parser.add_argument('--path_to_output_dir', type=str, default=".",
+                        help='Directory to save the resulting calibration files and intermediate outputs (default: current directory).')
+
     parser.add_argument('--output_filename', type=str, default="calibration.toml",
-                        help='Name of the output TOML file (default: calibration.toml)')
+                        help='Name of the output TOML file where calibration parameters will be saved (default: calibration.toml).')
+
+    parser.add_argument('--img_width', type=int, required=True,
+                        help='Image width in pixels for the input video frames.')
+
+    parser.add_argument('--img_height', type=int, required=True,
+                        help='Image height in pixels for the input video frames.')
+
+    parser.add_argument('--calc_intrinsics_method', type=str, default='default',
+                        choices=['default', 'CasCalib', 'Custom'],
+                        help=('Method for calculating intrinsic parameters: '
+                            '"default" uses Pose2Sim’s checkerboard calibration, '
+                            '"CasCalib" uses CasCalib-based estimation, '
+                            '"Custom" uses user-provided initial focal length (default: default).'))
+
+    parser.add_argument('--optimization_method', type=str, default='Combined',
+                        choices=['Liu', 'BundleAdjustment', 'Combined'],
+                        help=('Optimization method for extrinsics: '
+                            '"Liu" for Liu’s method, '
+                            '"BundleAdjustment" for full bundle adjustment, '
+                            '"Combined" for hybrid optimization (default: Combined).'))
+
+    
     
     args = parser.parse_args()
     
