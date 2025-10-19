@@ -342,7 +342,7 @@ def optimize_camera_parameters_test(final_idx_of_ref_cam, final_camera_Rt, Ks, i
     print("\nJoint optimization completed.")
     return all_best_results
 
-# Old version kept for reference, trying out new joint optimization above
+# Working version
 def optimize_camera_parameters(final_idx_of_ref_cam, final_camera_Rt, Ks, inliers_pair_list, inlier2_list, constrained_camera):
     """
     Optimize intrinsic and extrinsic camera parameters.
@@ -358,51 +358,51 @@ def optimize_camera_parameters(final_idx_of_ref_cam, final_camera_Rt, Ks, inlier
         dict: Dictionary of optimized camera parameters.
     """
 
-    print("\n========== DEBUG INFO FOR BUNDLE ADJUSTMENT ==========")
+    # print("\n========== DEBUG INFO FOR BUNDLE ADJUSTMENT ==========")
 
-    # 1. Intrinsics
-    print("Number of cameras (Ks):", len(Ks))
-    for i, K in enumerate(Ks):
-        print(f"Camera {i} intrinsic matrix shape: {np.shape(K)}")
-        print(K)
+    # # 1. Intrinsics
+    # print("Number of cameras (Ks):", len(Ks))
+    # for i, K in enumerate(Ks):
+    #     print(f"Camera {i} intrinsic matrix shape: {np.shape(K)}")
+    #     print(K)
 
-    # 2. Extrinsics (Rotation & Translation)
-    print("\nExtrinsics in final_camera_Rt:")
-    for key, val in final_camera_Rt.items():
-        try:
-            R, t = val
-            print(f"Camera {key}: R shape {np.shape(R)}, t shape {np.shape(t)}")
-            print("R:\n", R)
-            print("t.T:", t.T)
-        except Exception as e:
-            print(f"Camera {key} data not unpacked correctly:", e)
+    # # 2. Extrinsics (Rotation & Translation)
+    # print("\nExtrinsics in final_camera_Rt:")
+    # for key, val in final_camera_Rt.items():
+    #     try:
+    #         R, t = val
+    #         print(f"Camera {key}: R shape {np.shape(R)}, t shape {np.shape(t)}")
+    #         print("R:\n", R)
+    #         print("t.T:", t.T)
+    #     except Exception as e:
+    #         print(f"Camera {key} data not unpacked correctly:", e)
 
-    # 3. Inlier pairs (used for triangulation)
-    print("\nInliers Pair List:")
-    print("Length of inliers_pair_list:", len(inliers_pair_list))
-    if len(inliers_pair_list) > 0:
-        print("Example inlier_pair_list[0] shape:", np.shape(inliers_pair_list[0]))
-        print(inliers_pair_list[0][:5])
+    # # 3. Inlier pairs (used for triangulation)
+    # print("\nInliers Pair List:")
+    # print("Length of inliers_pair_list:", len(inliers_pair_list))
+    # if len(inliers_pair_list) > 0:
+    #     print("Example inlier_pair_list[0] shape:", np.shape(inliers_pair_list[0]))
+    #     print(inliers_pair_list[0][:5])
 
-    # 4. Inlier secondary list (target 2D detections)
-    print("\nInlier2 List:")
-    print("Length of inlier2_list:", len(inlier2_list))
-    if len(inlier2_list) > 0:
-        print("Example inlier2_list[0] shape:", np.shape(inlier2_list[0]))
-        print(inlier2_list[0][:5])
+    # # 4. Inlier secondary list (target 2D detections)
+    # print("\nInlier2 List:")
+    # print("Length of inlier2_list:", len(inlier2_list))
+    # if len(inlier2_list) > 0:
+    #     print("Example inlier2_list[0] shape:", np.shape(inlier2_list[0]))
+    #     print(inlier2_list[0][:5])
 
-    # 5. Triangulation sanity check
-    try:
-        example_pair = inliers_pair_list[0]
-        P1 = cam_create_projection_matrix(Ks[0], np.eye(3), np.zeros((3, 1)))
-        P2 = cam_create_projection_matrix(Ks[1], *final_camera_Rt[1])
-        points_3d_test = triangulate_points(example_pair, P1, P2)
-        print("\nTriangulated 3D points shape:", np.shape(points_3d_test))
-        print("Example 3D points:\n", points_3d_test[:5])
-    except Exception as e:
-        print("\nTriangulation test failed:", e)
+    # # 5. Triangulation sanity check
+    # try:
+    #     example_pair = inliers_pair_list[0]
+    #     P1 = cam_create_projection_matrix(Ks[0], np.eye(3), np.zeros((3, 1)))
+    #     P2 = cam_create_projection_matrix(Ks[1], *final_camera_Rt[1])
+    #     points_3d_test = triangulate_points(example_pair, P1, P2)
+    #     print("\nTriangulated 3D points shape:", np.shape(points_3d_test))
+    #     print("Example 3D points:\n", points_3d_test[:5])
+    # except Exception as e:
+    #     print("\nTriangulation test failed:", e)
 
-    print("\n========== END DEBUG INFO ==========\n")
+    # print("\n========== END DEBUG INFO ==========\n")
 
 
     # Initialize tolerance parameters for optimization
@@ -516,6 +516,10 @@ def optimize_camera_parameters(final_idx_of_ref_cam, final_camera_Rt, Ks, inlier
     MAX_ITERATIONS = 100
     iteration = 0
     
+    # Keep track of history of best extrinsics per camera
+    extrinsic_history = {f"Camera{final_idx_of_ref_cam}_{i}": {'R': [], 't': [], 'error': []}
+                         for i in range(len(Ks)) if i != final_idx_of_ref_cam}
+    
     # Doesnt have any history of all calculated extrinsics, only keeps updating the last best result
     while True:
         total_error = 0
@@ -528,7 +532,8 @@ def optimize_camera_parameters(final_idx_of_ref_cam, final_camera_Rt, Ks, inlier
             
             inliers_pair = inliers_pair_list[temp_idx]
             other_keypoints_detected = inlier2_list[temp_idx]
-            
+            pair_key = f"Camera{final_idx_of_ref_cam}_{i}"
+
             print(f"Calibrating camera {i}...")
             
             # Import best results for this camera pair
@@ -562,10 +567,20 @@ def optimize_camera_parameters(final_idx_of_ref_cam, final_camera_Rt, Ks, inlier
             
             N_P2 = cam_create_projection_matrix(ext_K, ext_R, ext_t)
             new_points_3d = triangulate_points(inliers_pair, P1, N_P2)
-            ex_reprojection_error = compute_reprojection_error(new_points_3d, inliers_pair, P1, N_P2)
-            total_error += ex_reprojection_error
+            new_error = compute_reprojection_error(new_points_3d, inliers_pair, P1, N_P2)
             
-            all_best_results[f"Camera{final_idx_of_ref_cam}_{i}"]['t'] = ext_t
+            extrinsic_history[pair_key]['R'].append(ext_R)
+            extrinsic_history[pair_key]['t'].append(optimized_t)
+            extrinsic_history[pair_key]['error'].append(new_error)
+            
+            # Update best if this iteration improved
+            if new_error < all_best_results[pair_key]['error']:
+                print(f"Camera {i} improved: {all_best_results[pair_key]['error']} → {new_error}")
+                all_best_results[pair_key]['t'] = optimized_t
+                all_best_results[pair_key]['error'] = new_error
+            
+            total_error += new_error
+            print(f"Camera {i} after optimization error: {new_error}")
         
         # Calculate average error across all cameras
         current_average_error = total_error / (len(Ks) - 1)
@@ -581,5 +596,20 @@ def optimize_camera_parameters(final_idx_of_ref_cam, final_camera_Rt, Ks, inlier
             
         prev_average_error = current_average_error
         iteration += 1
+    
+    print("\nSelecting best extrinsic results across all iterations...")
+    for pair_key, history in extrinsic_history.items():
+        if not history['error']:
+            continue
+        min_idx = np.argmin(history['error'])
+        best_R = history['R'][min_idx]
+        best_t = history['t'][min_idx]
+        best_error = history['error'][min_idx]
+
+        all_best_results[pair_key]['R'] = best_R
+        all_best_results[pair_key]['t'] = best_t
+        all_best_results[pair_key]['error'] = best_error
+
+        print(f"{pair_key} → Best error: {best_error}")
     
     return all_best_results

@@ -47,7 +47,7 @@ from Calibration.calculate_scale import calculate_scale_factor, apply_scale_to_r
 
 
 def calibrate_cameras(path_to_openpose_keypoints_dir, path_to_segments_file, 
-                      confidence_threshold_keypoints,  path_to_pose2sim_project_dir, output_filename, img_width, img_height, calc_intrinsics_method='default', optimization_method='Liu', path_to_intrinsics_file=None, confidence_threshold_cascalib=0.7):
+                      confidence_threshold_keypoints,  path_to_pose2sim_project_dir, output_path_calibration,output_filename, img_width, img_height, calc_intrinsics_method='default', optimization_method='Liu', path_to_intrinsics_file=None, confidence_threshold_cascalib=0.7):
     """
     Perform hybrid camera calibration using 2D keypoints, 3D markers, and segment definitions.
 
@@ -68,7 +68,10 @@ def calibrate_cameras(path_to_openpose_keypoints_dir, path_to_segments_file,
 
         path_to_pose2sim_project_dir (str): 
             Path to the Pose2Sim project root directory (contains folders like `pose-2d`, `pose-3d`, and `calibration`).
-
+        
+        output_path_calibration (str):
+            Directory where the calibration TOML file will be saved.
+            
         output_filename (str): 
             Name of the TOML file where the final calibration parameters will be saved.
 
@@ -297,7 +300,7 @@ def calibrate_cameras(path_to_openpose_keypoints_dir, path_to_segments_file,
             Ks = Ks_new
 
             # BA refinement
-            max_points = 200  # adjust as needed
+            max_points = 300  # adjust as needed
 
             for i in range(len(inliers_pair_list)):
                 pts = np.asarray(inliers_pair_list[i])
@@ -323,7 +326,7 @@ def calibrate_cameras(path_to_openpose_keypoints_dir, path_to_segments_file,
                 optimize_intrinsics=True,
                 constrained_camera=constrained_camera,
                 constraint_weight=1000,
-                max_nfev=100,
+                max_nfev=1000,
                 verbose=1,
             )
             # Build all_best_results from BA outputs
@@ -367,7 +370,7 @@ def calibrate_cameras(path_to_openpose_keypoints_dir, path_to_segments_file,
         
         # Test
         #print(all_best_results[pair_key]['K1'])
-        output_path_calibration = os.path.join(path_to_pose2sim_project_dir, 'calibration')
+        #output_path_calibration = os.path.join(path_to_pose2sim_project_dir, 'calibration')
         # Write results to TOML file
         write_to_toml(
             all_best_results, 

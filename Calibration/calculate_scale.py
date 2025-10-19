@@ -193,7 +193,7 @@ def get_default_segments():
         list: List of default segment tuples (keypoint1, keypoint2, length).
     """
     default_height = 1.7  # Default human height in meters
-    
+    # TODO: Gonna have to adjust these because halpe 26 has a head keypoint
     return [
         ('RHeel', 'Nose', default_height - 0.12), # 0.12 pertains to average distance of nose to the top of head
         ('RElbow', 'RWrist', 0.25),

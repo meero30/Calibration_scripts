@@ -183,9 +183,9 @@ def bundle_adjustment_refine(
         jac="2-point",
         verbose=1,
         max_nfev=max_nfev,
-        ftol=1e-4,
-        xtol=1e-4,
-        gtol=1e-4,
+        ftol=1e-5,
+        xtol=1e-5,
+        gtol=1e-5,
         loss="huber",
         diff_step=1e-4,
     )
