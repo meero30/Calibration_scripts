@@ -32,7 +32,8 @@ from scipy.optimize import least_squares
 
 from contextlib import redirect_stdout
 
-from Calibration.Bundle_Adjustment import bundle_adjustment_refine
+# from Calibration.Bundle_Adjustment import bundle_adjustment_refine
+from Calibration.Bundle_Adjustment_Jax import bundle_adjustment_refine
 from Calibration.Data_transformations_helper import run_pose2sim_triangulation
 from Calibration.Staged_calibration import optimize_camera_parameters, select_reference_camera
 from CasCalib.run_cascalib import process_alphapose_directory
@@ -71,7 +72,7 @@ def calibrate_cameras(path_to_openpose_keypoints_dir, path_to_segments_file,
         
         output_path_calibration (str):
             Directory where the calibration TOML file will be saved.
-            
+
         output_filename (str): 
             Name of the TOML file where the final calibration parameters will be saved.
 
@@ -300,7 +301,7 @@ def calibrate_cameras(path_to_openpose_keypoints_dir, path_to_segments_file,
             Ks = Ks_new
 
             # BA refinement
-            max_points = 300  # adjust as needed
+            max_points = 200  # adjust as needed
 
             for i in range(len(inliers_pair_list)):
                 pts = np.asarray(inliers_pair_list[i])
@@ -445,7 +446,7 @@ def main():
 
     parser.add_argument('--path_to_pose2sim_project_dir', type=str, required=True,
                         help='Path to the Pose2Sim project root directory containing pose-2d, pose-3d, and calibration folders.')
-
+## TODO: This working??
     parser.add_argument('--path_to_output_dir', type=str, default=".",
                         help='Directory to save the resulting calibration files and intermediate outputs (default: current directory).')
 

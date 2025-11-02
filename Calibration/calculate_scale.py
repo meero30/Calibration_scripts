@@ -1,10 +1,39 @@
 import numpy as np
 import toml
 from utilities.parse_trc_file import trc_file_to_structured_points_3d
+from Pose2Sim import skeletons
+from anytree import PreOrderIter
+
+
+def generate_keypoint_indices_map(skeleton_name: str):
+    """
+    Generate a sequential keypoint_indices_map from a skeleton defined
+    in Pose2Sim.skeletons (e.g. HALPE_26, BODY_25, etc.).
+
+    Args:
+        skeleton_name (str): The variable name of the skeleton (e.g., "HALPE_26")
+
+    Returns:
+        dict: Mapping of keypoint names to sequential indices
+    """
+
+    # Check if skeleton exists
+    if not hasattr(skeletons, skeleton_name):
+        raise ValueError(f"Skeleton '{skeleton_name}' not found in Pose2Sim.skeletons")
+
+    # Get the skeleton Node tree
+    skeleton_root = getattr(skeletons, skeleton_name)
+  
+    # Walk the tree in preorder
+    keypoint_indices_map = {
+        node.name: idx for idx, node in enumerate(PreOrderIter(skeleton_root))
+    }
+
+    return keypoint_indices_map
 
 
 # TODO: TO EDIT TO TRC 21 KEYPOINTS
-def get_keypoint_3d(frame_keypoints, keypoint_name):
+def get_keypoint_3d(frame_keypoints, keypoint_name, skeleton_name="BODY_25"):
     """
     Retrieve the 3D coordinate for a given keypoint name from a TRC file frame.
     
@@ -15,29 +44,31 @@ def get_keypoint_3d(frame_keypoints, keypoint_name):
     Returns:
         np.ndarray or None: 3D coordinate as an array, or None if the keypoint is not available.
     """
-    keypoint_indices_map = {
-        "CHip": 0,
-        "RHip": 1,
-        "RKnee": 2,
-        "RAnkle": 3,
-        "RBigToe": 4,
-        "RSmallToe": 5,
-        "RHeel": 6,
-        "LHip": 7,
-        "LKnee": 8,
-        "LAnkle": 9,
-        "LBigToe": 10,
-        "LSmallToe": 11,
-        "LHeel": 12,
-        "Neck": 13,
-        "Nose": 14,
-        "RShoulder": 15,
-        "RElbow": 16,
-        "RWrist": 17,
-        "LShoulder": 18,
-        "LElbow": 19,
-        "LWrist": 20
-    }
+    # keypoint_indices_map = {
+    #     "CHip": 0,
+    #     "RHip": 1,
+    #     "RKnee": 2,
+    #     "RAnkle": 3,
+    #     "RBigToe": 4,
+    #     "RSmallToe": 5,
+    #     "RHeel": 6,
+    #     "LHip": 7,
+    #     "LKnee": 8,
+    #     "LAnkle": 9,
+    #     "LBigToe": 10,
+    #     "LSmallToe": 11,
+    #     "LHeel": 12,
+    #     "Neck": 13,
+    #     "Nose": 14,
+    #     "RShoulder": 15,
+    #     "RElbow": 16,
+    #     "RWrist": 17,
+    #     "LShoulder": 18,
+    #     "LElbow": 19,
+    #     "LWrist": 20
+    # }
+
+    keypoint_indices_map = generate_keypoint_indices_map(skeleton_name)
     
     idx = keypoint_indices_map.get(keypoint_name, None)
     if idx is not None and idx < len(frame_keypoints):

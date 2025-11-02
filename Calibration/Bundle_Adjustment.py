@@ -162,20 +162,6 @@ def bundle_adjustment_refine(
     if verbose:
         print("[BA] Starting optimization with |t|=1 constraint")
 
-    # lsq_result = least_squares(
-    #     residuals,
-    #     x0,
-    #     method="trf",
-    #     jac="2-point",
-    #     verbose=1,
-    #     max_nfev=max_nfev,
-    #     ftol=1e-8,
-    #     xtol=1e-8,
-    #     gtol=1e-8,
-    #     loss="huber",
-    #     diff_step=1e-4,
-    # )
-
     lsq_result = least_squares(
         residuals,
         x0,
@@ -183,12 +169,26 @@ def bundle_adjustment_refine(
         jac="2-point",
         verbose=1,
         max_nfev=max_nfev,
-        ftol=1e-5,
-        xtol=1e-5,
-        gtol=1e-5,
+        ftol=1e-8,
+        xtol=1e-8,
+        gtol=1e-8,
         loss="huber",
         diff_step=1e-4,
     )
+
+    # lsq_result = least_squares(
+    #     residuals,
+    #     x0,
+    #     method="trf",
+    #     jac="2-point",
+    #     verbose=1,
+    #     max_nfev=max_nfev,
+    #     ftol=1e-5,
+    #     xtol=1e-5,
+    #     gtol=1e-5,
+    #     loss="huber",
+    #     diff_step=1e-4,
+    # )
 
     cams_final, pts_final = unpack_params(lsq_result.x)
 

@@ -55,7 +55,7 @@ from Calibration.keypoints_calibration import calibrate_cameras
 result = calibrate_cameras(
     path_to_openpose_keypoints_dir=r"C:\Users\Miro Hernandez\Documents\GaitScape\S01_STRC111_New\P07_paper\T07_Padless\pose",
     path_to_intrinsics_file=r"C:\Users\Miro Hernandez\Documents\GaitScape\S01_STRC111_New\P07_paper\copy of calib\Calib_scene.toml",
-    path_to_segments_file=r"C:\Users\Miro Hernandez\Documents\GaitScape\S01_STRC111_New\P07_paper\calibration\segments.toml",
+    path_to_segments_file=r"C:\Users\Miro Hernandez\Documents\GaitScape\S01_STRC111_New\P07_paper\calibration\segments_Body_25.toml",
     confidence_threshold_keypoints=0.7,
     path_to_pose2sim_project_dir=r"C:\Users\Miro Hernandez\Documents\GaitScape\S01_STRC111_New\P07_paper\T04_Normal",
     output_path_calibration=r"C:\Users\Miro Hernandez\Documents\GaitScape\S01_STRC111_New\P07_paper\calibration",
