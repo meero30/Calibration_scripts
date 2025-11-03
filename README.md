@@ -67,7 +67,8 @@ Method for calculating intrinsic parameters:
 
 Extrinsic optimization strategy:
 
-- `'Liu'`: Two-Staged Liu et al. method.  
+- `'Liu'`: Two-Staged Liu et al. method.
+- `'BundleAdjustment'`: Bundle Adjustment.  
 - `'Combined'`: Hybrid optimization combining multiple refinement stages (Liu and Bundle Adjustment).
 
 ---
