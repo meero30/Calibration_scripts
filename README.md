@@ -23,7 +23,7 @@ Supply the needed arg paths in the form of strings:
 
 - **`path_to_intrinsics_file`**  
   TOML file containing the calculated Pose2Sim Checkerboard Intrinsics.  
-  (You can interrupt the program at extrinsics calculations and it will still generate a TOML format with the intrinsics.)  
+  (You can interrupt the Pose2Sim calibration program at extrinsics calculations and it will still generate a TOML format with the intrinsics.)  
   Argument can be `None` if `calc_intrinsics_method` is not set to `'default'`.
 
 - **`path_to_segments_file`**  
