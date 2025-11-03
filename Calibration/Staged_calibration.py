@@ -342,8 +342,8 @@ def optimize_camera_parameters_test(final_idx_of_ref_cam, final_camera_Rt, Ks, i
     print("\nJoint optimization completed.")
     return all_best_results
 
-# Old version kept for reference, trying out new joint optimization above
-def optimize_camera_parameters(final_idx_of_ref_cam, final_camera_Rt, Ks, inliers_pair_list, inlier2_list, constrained_camera):
+# Working version
+def optimize_camera_parameters(final_idx_of_ref_cam, final_camera_Rt, Ks, inliers_pair_list, inlier2_list, constrained_camera, optimize_intrinsics=True):
     """
     Optimize intrinsic and extrinsic camera parameters.
     
@@ -358,51 +358,51 @@ def optimize_camera_parameters(final_idx_of_ref_cam, final_camera_Rt, Ks, inlier
         dict: Dictionary of optimized camera parameters.
     """
 
-    print("\n========== DEBUG INFO FOR BUNDLE ADJUSTMENT ==========")
+    # print("\n========== DEBUG INFO FOR BUNDLE ADJUSTMENT ==========")
 
-    # 1. Intrinsics
-    print("Number of cameras (Ks):", len(Ks))
-    for i, K in enumerate(Ks):
-        print(f"Camera {i} intrinsic matrix shape: {np.shape(K)}")
-        print(K)
+    # # 1. Intrinsics
+    # print("Number of cameras (Ks):", len(Ks))
+    # for i, K in enumerate(Ks):
+    #     print(f"Camera {i} intrinsic matrix shape: {np.shape(K)}")
+    #     print(K)
 
-    # 2. Extrinsics (Rotation & Translation)
-    print("\nExtrinsics in final_camera_Rt:")
-    for key, val in final_camera_Rt.items():
-        try:
-            R, t = val
-            print(f"Camera {key}: R shape {np.shape(R)}, t shape {np.shape(t)}")
-            print("R:\n", R)
-            print("t.T:", t.T)
-        except Exception as e:
-            print(f"Camera {key} data not unpacked correctly:", e)
+    # # 2. Extrinsics (Rotation & Translation)
+    # print("\nExtrinsics in final_camera_Rt:")
+    # for key, val in final_camera_Rt.items():
+    #     try:
+    #         R, t = val
+    #         print(f"Camera {key}: R shape {np.shape(R)}, t shape {np.shape(t)}")
+    #         print("R:\n", R)
+    #         print("t.T:", t.T)
+    #     except Exception as e:
+    #         print(f"Camera {key} data not unpacked correctly:", e)
 
-    # 3. Inlier pairs (used for triangulation)
-    print("\nInliers Pair List:")
-    print("Length of inliers_pair_list:", len(inliers_pair_list))
-    if len(inliers_pair_list) > 0:
-        print("Example inlier_pair_list[0] shape:", np.shape(inliers_pair_list[0]))
-        print(inliers_pair_list[0][:5])
+    # # 3. Inlier pairs (used for triangulation)
+    # print("\nInliers Pair List:")
+    # print("Length of inliers_pair_list:", len(inliers_pair_list))
+    # if len(inliers_pair_list) > 0:
+    #     print("Example inlier_pair_list[0] shape:", np.shape(inliers_pair_list[0]))
+    #     print(inliers_pair_list[0][:5])
 
-    # 4. Inlier secondary list (target 2D detections)
-    print("\nInlier2 List:")
-    print("Length of inlier2_list:", len(inlier2_list))
-    if len(inlier2_list) > 0:
-        print("Example inlier2_list[0] shape:", np.shape(inlier2_list[0]))
-        print(inlier2_list[0][:5])
+    # # 4. Inlier secondary list (target 2D detections)
+    # print("\nInlier2 List:")
+    # print("Length of inlier2_list:", len(inlier2_list))
+    # if len(inlier2_list) > 0:
+    #     print("Example inlier2_list[0] shape:", np.shape(inlier2_list[0]))
+    #     print(inlier2_list[0][:5])
 
-    # 5. Triangulation sanity check
-    try:
-        example_pair = inliers_pair_list[0]
-        P1 = cam_create_projection_matrix(Ks[0], np.eye(3), np.zeros((3, 1)))
-        P2 = cam_create_projection_matrix(Ks[1], *final_camera_Rt[1])
-        points_3d_test = triangulate_points(example_pair, P1, P2)
-        print("\nTriangulated 3D points shape:", np.shape(points_3d_test))
-        print("Example 3D points:\n", points_3d_test[:5])
-    except Exception as e:
-        print("\nTriangulation test failed:", e)
+    # # 5. Triangulation sanity check
+    # try:
+    #     example_pair = inliers_pair_list[0]
+    #     P1 = cam_create_projection_matrix(Ks[0], np.eye(3), np.zeros((3, 1)))
+    #     P2 = cam_create_projection_matrix(Ks[1], *final_camera_Rt[1])
+    #     points_3d_test = triangulate_points(example_pair, P1, P2)
+    #     print("\nTriangulated 3D points shape:", np.shape(points_3d_test))
+    #     print("Example 3D points:\n", points_3d_test[:5])
+    # except Exception as e:
+    #     print("\nTriangulation test failed:", e)
 
-    print("\n========== END DEBUG INFO ==========\n")
+    # print("\n========== END DEBUG INFO ==========\n")
 
 
     # Initialize tolerance parameters for optimization
@@ -424,7 +424,9 @@ def optimize_camera_parameters(final_idx_of_ref_cam, final_camera_Rt, Ks, inlier
     }
     
     all_best_results = {}
-    iterations = 20  # Number of intrinsic optimization iterations
+    atol_intrinsic = 1e-10  # Absolute tolerance
+    rtol_intrinsic = 1e-5   # Relative tolerance
+    MAX_INTRINSIC_ITER = 100  # Number of intrinsic optimization iterations
     
     # Fixed reference camera intrinsic matrix
     Fix_K = Ks[final_idx_of_ref_cam]
@@ -432,73 +434,122 @@ def optimize_camera_parameters(final_idx_of_ref_cam, final_camera_Rt, Ks, inlier
     # Principal point coordinates
     u0 = Fix_K[0, 2]  # Principal point u0
     v0 = Fix_K[1, 2]  # Principal point v0
-    
-    # First phase: Optimize intrinsics for each camera
-    print("Phase 1: Intrinsic parameter optimization")
-    temp_idx = -1
-    for j in range(len(Ks)):
-        if j == final_idx_of_ref_cam:
-            continue
-        temp_idx += 1
-        
-        paired_keypoints = inliers_pair_list[temp_idx]
-        inliers2 = inlier2_list[temp_idx]
-        
-        camera_pair_key = f"Camera{final_idx_of_ref_cam}_{j}"
-        print(f"Optimizing for pair: {camera_pair_key}")
-        K_optimized = Ks[j]
-        R_optimized, t_optimized = final_camera_Rt[j]
-        
-        optimization_results = {'K1': [], 'K2': [], 'R': [], 't': [], 'errors': []}
-        
-        for iteration in range(iterations):
-            print(f"---Iteration {iteration + 1} for {camera_pair_key} ---")
-            OPT_K = K_optimized
+    if optimize_intrinsics:
+
+        # First phase: Optimize intrinsics for each camera
+        print("Phase 1: Intrinsic parameter optimization")
+        temp_idx = -1
+        for j in range(len(Ks)):
+            if j == final_idx_of_ref_cam:
+                continue
+            temp_idx += 1
             
+            paired_keypoints = inliers_pair_list[temp_idx]
+            inliers2 = inlier2_list[temp_idx]
+            
+            camera_pair_key = f"Camera{final_idx_of_ref_cam}_{j}"
+            print(f"Optimizing for pair: {camera_pair_key}")
+            K_optimized = Ks[j]
+            R_optimized, t_optimized = final_camera_Rt[j]
+            
+            optimization_results = {'K1': [], 'K2': [], 'R': [], 't': [], 'errors': []}
+            # Initialize error for this camera's loop
+            prev_intrinsic_error = float('inf')
+
+            for iteration in range(MAX_INTRINSIC_ITER):
+                print(f"---Iteration {iteration + 1} for {camera_pair_key} ---")
+                OPT_K = K_optimized
+                
+                P1 = cam_create_projection_matrix(Fix_K, np.eye(3), np.zeros((3, 1)))
+                P2 = cam_create_projection_matrix(OPT_K, R_optimized, t_optimized)
+                
+                points_3d_int = triangulate_points(paired_keypoints, P1, P2)
+                OPT_K_optimized = optimize_intrinsic_parameters(
+                    points_3d_int, inliers2, OPT_K, R_optimized, t_optimized, tolerance_list, u0, v0
+                )
+                OPT_K = OPT_K_optimized
+                
+                P2 = cam_create_projection_matrix(OPT_K, R_optimized, t_optimized)
+                int_error = compute_reprojection_error(points_3d_int, paired_keypoints, P1, P2)
+                
+                print(f"Camera pair {camera_pair_key} Iteration {iteration + 1}: Mean reprojection error: {int_error}")
+                
+                optimization_results['K1'].append(Fix_K)
+                optimization_results['K2'].append(OPT_K)
+                optimization_results['R'].append(R_optimized)
+                optimization_results['t'].append(t_optimized)
+                optimization_results['errors'].append(int_error)
+                
+                improvement = prev_intrinsic_error - int_error
+                # Stop if improvement is negligible (absolute OR relative)
+                if (improvement < atol_intrinsic) or (improvement / prev_intrinsic_error < rtol_intrinsic):
+                    print(f"Converged: Error improvement ({improvement:.2e}) below threshold.")
+                    break
+                
+                prev_intrinsic_error = int_error
+                K_optimized = OPT_K
+            
+            # Select best parameters from optimization iterations
+            if optimization_results['errors']:
+                min_error_for_pair = min(optimization_results['errors'])
+                index_of_min_error = optimization_results['errors'].index(min_error_for_pair)
+                best_K1 = optimization_results['K1'][index_of_min_error]
+                best_K2 = optimization_results['K2'][index_of_min_error]
+                best_R = optimization_results['R'][index_of_min_error]
+                best_t = optimization_results['t'][index_of_min_error]
+                
+                all_best_results[camera_pair_key] = {
+                    'K1': best_K1,
+                    'K2': best_K2,
+                    'R': best_R,
+                    't': best_t,
+                    'error': min_error_for_pair
+                }
+        
+        # Display best intrinsic optimization results
+        for pair_key, results in all_best_results.items():
+            print(f"Best intrinsic results for {pair_key}:")
+            print(f"- Minimum reprojection error: {results['error']}")
+    else:
+        # -----------------------------------------------------------------
+        # NEW ELSE BLOCK: Populate all_best_results with INITIAL values
+        # -----------------------------------------------------------------
+        print("Skipping intrinsic parameter optimization. Populating 'all_best_results' with initial values.")
+        temp_idx = -1
+        for j in range(len(Ks)):
+            if j == final_idx_of_ref_cam:
+                continue
+            temp_idx += 1
+            
+            camera_pair_key = f"Camera{final_idx_of_ref_cam}_{j}"
+            
+            # Get the initial parameters from the function arguments
+            initial_K2 = Ks[j]
+            initial_R, initial_t = final_camera_Rt[j]
+            
+            # Compute the initial error for this pair
+            # This is important so Phase 2 has a starting error to beat.
             P1 = cam_create_projection_matrix(Fix_K, np.eye(3), np.zeros((3, 1)))
-            P2 = cam_create_projection_matrix(OPT_K, R_optimized, t_optimized)
+            P2 = cam_create_projection_matrix(initial_K2, initial_R, initial_t)
+            paired_keypoints = inliers_pair_list[temp_idx]
             
-            points_3d_int = triangulate_points(paired_keypoints, P1, P2)
-            OPT_K_optimized = optimize_intrinsic_parameters(
-                points_3d_int, inliers2, OPT_K, R_optimized, t_optimized, tolerance_list, u0, v0
-            )
-            OPT_K = OPT_K_optimized
+            # We must triangulate to get an error
+            points_3d = triangulate_points(paired_keypoints, P1, P2)
+            initial_error = compute_reprojection_error(points_3d, paired_keypoints, P1, P2)
             
-            P2 = cam_create_projection_matrix(OPT_K, R_optimized, t_optimized)
-            int_error = compute_reprojection_error(points_3d_int, paired_keypoints, P1, P2)
-            
-            print(f"Camera pair {camera_pair_key} Iteration {iteration + 1}: Mean reprojection error: {int_error}")
-            
-            optimization_results['K1'].append(Fix_K)
-            optimization_results['K2'].append(OPT_K)
-            optimization_results['R'].append(R_optimized)
-            optimization_results['t'].append(t_optimized)
-            optimization_results['errors'].append(int_error)
-            
-            K_optimized = OPT_K
-        
-        # Select best parameters from optimization iterations
-        if optimization_results['errors']:
-            min_error_for_pair = min(optimization_results['errors'])
-            index_of_min_error = optimization_results['errors'].index(min_error_for_pair)
-            best_K1 = optimization_results['K1'][index_of_min_error]
-            best_K2 = optimization_results['K2'][index_of_min_error]
-            best_R = optimization_results['R'][index_of_min_error]
-            best_t = optimization_results['t'][index_of_min_error]
-            
+            # Populate the dictionary with the initial values
             all_best_results[camera_pair_key] = {
-                'K1': best_K1,
-                'K2': best_K2,
-                'R': best_R,
-                't': best_t,
-                'error': min_error_for_pair
+                'K1': Fix_K,
+                'K2': initial_K2,
+                'R': initial_R,
+                't': initial_t,
+                'error': initial_error  # Use the computed initial error
             }
-    
-    # Display best intrinsic optimization results
-    for pair_key, results in all_best_results.items():
-        print(f"Best intrinsic results for {pair_key}:")
-        print(f"- Minimum reprojection error: {results['error']}")
-    
+            print(f"  - Populated {camera_pair_key} with initial error: {initial_error}")
+        # -----------------------------------------------------------------
+        # END OF NEW ELSE BLOCK
+        # -----------------------------------------------------------------
+
     # Second phase: Joint optimization of extrinsic parameters
     print("\nPhase 2: Extrinsic parameter joint optimization")
     
@@ -512,9 +563,14 @@ def optimize_camera_parameters(final_idx_of_ref_cam, final_camera_Rt, Ks, inlier
     }
     
     prev_average_error = float('inf')
-    min_improvement = 1e-10  # Minimum improvement threshold
+    min_improvement = 1e-10 # This is your ABSOLUTE tolerance (atol)
+    rel_improvement = 1e-5  # This is your RELATIVE tolerance (rtol)
     MAX_ITERATIONS = 100
     iteration = 0
+    
+    # Keep track of history of best extrinsics per camera
+    extrinsic_history = {f"Camera{final_idx_of_ref_cam}_{i}": {'R': [], 't': [], 'error': []}
+                         for i in range(len(Ks)) if i != final_idx_of_ref_cam}
     
     # Doesnt have any history of all calculated extrinsics, only keeps updating the last best result
     while True:
@@ -528,7 +584,8 @@ def optimize_camera_parameters(final_idx_of_ref_cam, final_camera_Rt, Ks, inlier
             
             inliers_pair = inliers_pair_list[temp_idx]
             other_keypoints_detected = inlier2_list[temp_idx]
-            
+            pair_key = f"Camera{final_idx_of_ref_cam}_{i}"
+
             print(f"Calibrating camera {i}...")
             
             # Import best results for this camera pair
@@ -562,24 +619,65 @@ def optimize_camera_parameters(final_idx_of_ref_cam, final_camera_Rt, Ks, inlier
             
             N_P2 = cam_create_projection_matrix(ext_K, ext_R, ext_t)
             new_points_3d = triangulate_points(inliers_pair, P1, N_P2)
-            ex_reprojection_error = compute_reprojection_error(new_points_3d, inliers_pair, P1, N_P2)
-            total_error += ex_reprojection_error
+            new_error = compute_reprojection_error(new_points_3d, inliers_pair, P1, N_P2)
             
-            all_best_results[f"Camera{final_idx_of_ref_cam}_{i}"]['t'] = ext_t
+            extrinsic_history[pair_key]['R'].append(ext_R)
+            extrinsic_history[pair_key]['t'].append(optimized_t)
+            extrinsic_history[pair_key]['error'].append(new_error)
+            
+            # Update best if this iteration improved
+            if new_error < all_best_results[pair_key]['error']:
+                print(f"Camera {i} improved: {all_best_results[pair_key]['error']} → {new_error}")
+                all_best_results[pair_key]['t'] = optimized_t
+                all_best_results[pair_key]['error'] = new_error
+            
+            total_error += new_error
+            print(f"Camera {i} after optimization error: {new_error}")
         
         # Calculate average error across all cameras
+        # current_average_error = total_error / (len(Ks) - 1)
+        # print(f"Iteration {iteration}: Average reprojection error = {current_average_error}")
+        # if (prev_average_error - current_average_error) < min_improvement:
+        #     print("Optimization completed: Error reduction below threshold")
+        #     break
+            
+        # if iteration >= MAX_ITERATIONS:
+        #     print("Optimization completed: Maximum iterations reached")
+        #     break
+
+
+        # --- New Convergence Check ---
         current_average_error = total_error / (len(Ks) - 1)
         print(f"Iteration {iteration}: Average reprojection error = {current_average_error}")
+        # 1. Check for convergence
+        improvement = prev_average_error - current_average_error
         
-        if (prev_average_error - current_average_error) < min_improvement:
-            print("Optimization completed: Error reduction below threshold")
+        # Check both absolute AND relative improvement
+        if (improvement < min_improvement) or (improvement / prev_average_error < rel_improvement):
+            print(f"Optimization completed: Error improvement ({improvement:.2e}) below threshold.")
             break
-            
+        
+        # 2. Check for max iterations
         if iteration >= MAX_ITERATIONS:
             print("Optimization completed: Maximum iterations reached")
             break
             
         prev_average_error = current_average_error
         iteration += 1
+    
+    print("\nSelecting best extrinsic results across all iterations...")
+    for pair_key, history in extrinsic_history.items():
+        if not history['error']:
+            continue
+        min_idx = np.argmin(history['error'])
+        best_R = history['R'][min_idx]
+        best_t = history['t'][min_idx]
+        best_error = history['error'][min_idx]
+
+        all_best_results[pair_key]['R'] = best_R
+        all_best_results[pair_key]['t'] = best_t
+        all_best_results[pair_key]['error'] = best_error
+
+        print(f"{pair_key} → Best error: {best_error}")
     
     return all_best_results

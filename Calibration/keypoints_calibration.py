@@ -32,7 +32,8 @@ from scipy.optimize import least_squares
 
 from contextlib import redirect_stdout
 
-from Calibration.Bundle_Adjustment import bundle_adjustment_refine
+# from Calibration.Bundle_Adjustment import bundle_adjustment_refine
+from Calibration.Bundle_Adjustment_Jax import bundle_adjustment_refine
 from Calibration.Data_transformations_helper import run_pose2sim_triangulation
 from Calibration.Staged_calibration import optimize_camera_parameters, select_reference_camera
 from CasCalib.run_cascalib import process_alphapose_directory
@@ -40,14 +41,14 @@ from utilities.Loader import get_latest_trc_file, load_intrinsics_from_toml, loa
 from utilities.trc_Xup_to_Yup import trc_Xup_to_Yup_func
 from utilities.OpenPose_to_AlphaPose import OpenPose_to_AlphaPose_func
 from utilities.write_to_toml import write_to_toml
-
+from Calibration.Calculations import create_heuristic_K_matrix
 from Calibration.calculate_scale import calculate_scale_factor, apply_scale_to_results
 
 
 
 
 def calibrate_cameras(path_to_openpose_keypoints_dir, path_to_segments_file, 
-                      confidence_threshold_keypoints,  path_to_pose2sim_project_dir, output_filename, img_width, img_height, calc_intrinsics_method='default', optimization_method='Liu', path_to_intrinsics_file=None, confidence_threshold_cascalib=0.7):
+                      confidence_threshold_keypoints,  path_to_pose2sim_project_dir, output_path_calibration,output_filename, img_width, img_height, calc_intrinsics_method='default', optimization_method='Liu', path_to_intrinsics_file=None, confidence_threshold_cascalib=0.7):
     """
     Perform hybrid camera calibration using 2D keypoints, 3D markers, and segment definitions.
 
@@ -68,6 +69,9 @@ def calibrate_cameras(path_to_openpose_keypoints_dir, path_to_segments_file,
 
         path_to_pose2sim_project_dir (str): 
             Path to the Pose2Sim project root directory (contains folders like `pose-2d`, `pose-3d`, and `calibration`).
+        
+        output_path_calibration (str):
+            Directory where the calibration TOML file will be saved.
 
         output_filename (str): 
             Name of the TOML file where the final calibration parameters will be saved.
@@ -82,6 +86,7 @@ def calibrate_cameras(path_to_openpose_keypoints_dir, path_to_segments_file,
             Method for calculating intrinsic parameters:
             - `'default'`: Uses Pose2Sim’s checkerboard-based calibration (standard method).
             - `'CasCalib'`: Uses CasCalib algorithm for intrinsic estimation.
+            - `'heuristic'`: Uses a heuristic based on image dimensions.
             - `'Custom'`: Uses user-provided initial focal length or parameters.
 
         optimization_method (str, optional): 
@@ -167,7 +172,15 @@ def calibrate_cameras(path_to_openpose_keypoints_dir, path_to_segments_file,
                 print("Failed to calculate intrinsics using CasCalib method")
                 return False
             
-
+        elif calc_intrinsics_method == 'heuristic':
+            print("Using heuristic method for intrinsics calculation")
+            num_cameras = len(OPENPOSE_KEYPOINTS_DIRECTORY)
+            Ks = []
+            for _ in range(num_cameras):
+                K = create_heuristic_K_matrix(img_width, img_height)
+                Ks.append(K)
+            print("Calculated heuristic Ks:", Ks)
+            
         elif calc_intrinsics_method == 'Custom':
 
             #TODO: Implement custom intrinsics calculation method
@@ -194,7 +207,7 @@ def calibrate_cameras(path_to_openpose_keypoints_dir, path_to_segments_file,
         if optimization_method == 'Liu':
         # Optimize camera parameters
             all_best_results = optimize_camera_parameters(
-                final_idx_of_ref_cam, final_camera_Rt, Ks, inliers_pair_list, inlier2_list, constrained_camera
+                final_idx_of_ref_cam, final_camera_Rt, Ks, inliers_pair_list, inlier2_list, constrained_camera, optimize_intrinsics=True
             )
         elif optimization_method == 'BundleAdjustment':
             # --- Subsample points for faster BA ---
@@ -214,7 +227,7 @@ def calibrate_cameras(path_to_openpose_keypoints_dir, path_to_segments_file,
                 final_camera_Rt,
                 inliers_pair_list,
                 inlier2_list,
-                optimize_intrinsics=True,
+                optimize_intrinsics=False,
                 constrained_camera=constrained_camera,
                 constraint_weight=1000,
                 max_nfev=100,
@@ -250,7 +263,7 @@ def calibrate_cameras(path_to_openpose_keypoints_dir, path_to_segments_file,
 
             # Optimize camera parameters
             all_best_results = optimize_camera_parameters(
-                final_idx_of_ref_cam, final_camera_Rt, Ks, inliers_pair_list, inlier2_list, constrained_camera
+                final_idx_of_ref_cam, final_camera_Rt, Ks, inliers_pair_list, inlier2_list, constrained_camera, optimize_intrinsics=True
             )
             # for debugging
             inliers_pair_list_copy = inliers_pair_list.copy()
@@ -297,7 +310,7 @@ def calibrate_cameras(path_to_openpose_keypoints_dir, path_to_segments_file,
             Ks = Ks_new
 
             # BA refinement
-            max_points = 200  # adjust as needed
+            max_points = 100  # adjust as needed
 
             for i in range(len(inliers_pair_list)):
                 pts = np.asarray(inliers_pair_list[i])
@@ -323,7 +336,7 @@ def calibrate_cameras(path_to_openpose_keypoints_dir, path_to_segments_file,
                 optimize_intrinsics=True,
                 constrained_camera=constrained_camera,
                 constraint_weight=1000,
-                max_nfev=100,
+                max_nfev=1000,
                 verbose=1,
             )
             # Build all_best_results from BA outputs
@@ -367,7 +380,7 @@ def calibrate_cameras(path_to_openpose_keypoints_dir, path_to_segments_file,
         
         # Test
         #print(all_best_results[pair_key]['K1'])
-        output_path_calibration = os.path.join(path_to_pose2sim_project_dir, 'calibration')
+        #output_path_calibration = os.path.join(path_to_pose2sim_project_dir, 'calibration')
         # Write results to TOML file
         write_to_toml(
             all_best_results, 
@@ -442,7 +455,7 @@ def main():
 
     parser.add_argument('--path_to_pose2sim_project_dir', type=str, required=True,
                         help='Path to the Pose2Sim project root directory containing pose-2d, pose-3d, and calibration folders.')
-
+## TODO: This working??
     parser.add_argument('--path_to_output_dir', type=str, default=".",
                         help='Directory to save the resulting calibration files and intermediate outputs (default: current directory).')
 

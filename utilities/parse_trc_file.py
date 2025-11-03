@@ -24,7 +24,7 @@ def trc_file_to_structured_points_3d(trc_file_path):
     print("\nHeader information:")
     for i in range(min(5, len(lines))):
         print(f"Line {i}: {lines[i].strip()}")
-    
+
     # Parse header information
     header_info = lines[2].strip().split()
     num_frames = int(header_info[2])
@@ -33,8 +33,8 @@ def trc_file_to_structured_points_3d(trc_file_path):
     print(f"\nDetected {num_frames} frames and {num_markers} markers from header")
     
     # Verify that we have the expected number of markers (21)
-    assert num_markers == 21, f"Expected 21 markers, but found {num_markers} in the TRC file"
-    
+    # assert num_markers == 21, f"Expected 21 markers, but found {num_markers} in the TRC file"
+    # Modified to be flexible with number of markers
     # Create the structured_points_3d list
     structured_points_3d = []
     
@@ -58,17 +58,19 @@ def trc_file_to_structured_points_3d(trc_file_path):
         
         # Skip the first two columns (Frame# and Time)
         data_values = values[2:]
+
+        print(f"Total data values for keypoints: {len(data_values)}")
         
-        # Ensure we have the correct number of values (21 markers * 3 coordinates = 63)
-        if len(data_values) != 63:
-            print(f"Warning: Frame {i-5} has {len(data_values)} values instead of 63")
-            continue
-        
-        # Create a frame array to hold the 21 keypoints
-        frame_keypoints = np.zeros((21, 1), dtype=object)
+        # Old Check for 21 markers
+        # if len(data_values) != 63:
+        #     print(f"Warning: Frame {i-5} has {len(data_values)} values instead of 63")
+        #     continue
+
+        # Create a frame array to hold the num_markers keypoints
+        frame_keypoints = np.zeros((num_markers, 1), dtype=object)
         
         # Show sample data for first 3 keypoints
-        print("\nSample keypoint data:")
+        print("\nSample keypoint data:") # TODO: Here is another case of 21 keypoints, make it flexible
         for j in range(min(3, 21)):
             x = float(data_values[j*3])
             y = float(data_values[j*3 + 1])
@@ -79,8 +81,8 @@ def trc_file_to_structured_points_3d(trc_file_path):
             keypoint = np.array([[x], [y], [z]])
             frame_keypoints[j, 0] = keypoint
         
-        # Populate remaining keypoints
-        for j in range(3, 21):
+        # Populate remaining keypoints 
+        for j in range(3, num_markers): 
             x = float(data_values[j*3])
             y = float(data_values[j*3 + 1])
             z = float(data_values[j*3 + 2])
@@ -99,13 +101,14 @@ def trc_file_to_structured_points_3d(trc_file_path):
         values = line.split()
         data_values = values[2:]
         
-        if len(data_values) != 63:
-            print(f"Warning: Frame {i-5} has {len(data_values)} values instead of 63")
-            continue
-        
-        frame_keypoints = np.zeros((21, 1), dtype=object)
-        
-        for j in range(21):
+        # Old Check for 21 markers
+        # if len(data_values) != 63: 
+        #     print(f"Warning: Frame {i-5} has {len(data_values)} values instead of 63")
+        #     continue
+
+        frame_keypoints = np.zeros((num_markers, 1), dtype=object)
+
+        for j in range(num_markers):
             x = float(data_values[j*3])
             y = float(data_values[j*3 + 1])
             z = float(data_values[j*3 + 2])
