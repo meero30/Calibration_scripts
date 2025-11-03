@@ -33,8 +33,8 @@ def trc_file_to_structured_points_3d(trc_file_path):
     print(f"\nDetected {num_frames} frames and {num_markers} markers from header")
     
     # Verify that we have the expected number of markers (21)
-    assert num_markers == 21, f"Expected 21 markers, but found {num_markers} in the TRC file"
-    
+    # assert num_markers == 21, f"Expected 21 markers, but found {num_markers} in the TRC file"
+    # Modified to be flexible with number of markers
     # Create the structured_points_3d list
     structured_points_3d = []
     

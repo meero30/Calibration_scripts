@@ -45,19 +45,66 @@ from jax.scipy.linalg import expm
 # numerically stable and has a well-defined, smooth
 # derivative (Jacobian) even for zero-rotations.
 # This fixes the optimizer instability.
-def _R_from_rodrigues_jax(rvec):
-    """rvec (3,) -> R (3x3) using jax.scipy.linalg.expm"""
+# def _R_from_rodrigues_jax(rvec):
+#     """rvec (3,) -> R (3x3) using jax.scipy.linalg.expm"""
 
-    # Create the 3x3 skew-symmetric matrix K
+#     # Create the 3x3 skew-symmetric matrix K
+#     K = jnp.array([
+#         [0, -rvec[2], rvec[1]],
+#         [rvec[2], 0, -rvec[0]],
+#         [-rvec[1], rvec[0], 0],
+#     ])
+
+#     # Compute the matrix exponential, which is the
+#     # stable equivalent of the Rodrigues formula.
+#     return expm(K)
+
+
+# --- JAX: Re-implementation of cv2.Rodrigues ---
+# This is the "fast and stable" version.
+# It uses the direct algebraic formula but avoids division by zero
+# using a Taylor approximation, which is fully differentiable.
+def _R_from_rodrigues_jax(rvec):
+    """rvec (3,) -> R (3x3) using the stable algebraic formula"""
+    
+    # Calculate theta_sq and theta
+    theta_sq = jnp.dot(rvec, rvec)
+    theta = jnp.sqrt(theta_sq)
+    
+    # Create the skew-symmetric matrix K from rvec
     K = jnp.array([
         [0, -rvec[2], rvec[1]],
         [rvec[2], 0, -rvec[0]],
-        [-rvec[1], rvec[0], 0],
+        [-rvec[1], rvec[0], 0]
     ])
-
-    # Compute the matrix exponential, which is the
-    # stable equivalent of the Rodrigues formula.
-    return expm(K)
+    
+    # R = I + A*K + B*K^2
+    # We need to compute A = sin(theta)/theta
+    # and B = (1 - cos(theta))/theta^2
+    
+    # Use Taylor series expansion for A and B when theta is near zero
+    # This avoids division by zero and is numerically stable.
+    # We use jnp.where to create a branchless, JIT-compatible selection.
+    
+    # Check if theta is very small
+    is_near_zero = theta_sq < 1e-8
+    
+    # Taylor expansion for A = 1 - theta^2/6 + ...
+    A_small = 1.0 - theta_sq / 6.0
+    # Taylor expansion for B = 1/2 - theta^4/24 + ...
+    B_small = 0.5 - theta_sq / 24.0
+    
+    # Standard formula for A
+    A_large = jnp.sin(theta) / theta
+    # Standard formula for B
+    B_large = (1.0 - jnp.cos(theta)) / theta_sq
+    
+    # Select A and B based on the value of theta
+    A = jnp.where(is_near_zero, A_small, A_large)
+    B = jnp.where(is_near_zero, B_small, B_large)
+    
+    # Compute the final rotation matrix
+    return jnp.eye(3) + A * K + B * (K @ K)
 
 # --- JAX: Keep the original for creating x0 ---
 # This is fine, as it's outside the optimization loop.
@@ -373,16 +420,16 @@ def bundle_adjustment_refine(
     # )
 
     lsq_result = least_squares(
-        scipy_residuals_wrapper,  # <--- NEW
+        scipy_residuals_wrapper, 
         x0,
-        jac=scipy_jacobian_wrapper, # <--- NEW
+        jac=scipy_jacobian_wrapper, 
         method="trf",
         verbose=1,
         max_nfev=max_nfev,
         ftol=1e-7,
         xtol=1e-7,
         gtol=1e-5,
-        loss="huber"
+        loss="linear"
     )
 
     # --- JAX: Unpack final results ---

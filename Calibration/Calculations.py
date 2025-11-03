@@ -171,3 +171,25 @@ def compute_reprojection_error(precomputed_points_3d, keypoints_detected, P1, P2
 
     mean_error = total_error / total_points if total_points > 0 else 0
     return mean_error
+
+
+def create_heuristic_K_matrix(image_width, image_height):
+    """
+    Creates a stable, deterministic initial guess for a K matrix.
+    """
+
+    # 1. Guess Principal Point (cx, cy) is at the center
+    cx = image_width / 2.0
+    cy = image_height / 2.0
+
+    # 2. Guess Focal Length (fx, fy) is the largest dimension
+    fx = max(image_width, image_height)
+    fy = max(image_width, image_height)
+
+    K = np.array([
+        [fx, 0,  cx],
+        [0,  fy, cy],
+        [0,  0,  1]
+    ], dtype=np.float64)
+
+    return K
