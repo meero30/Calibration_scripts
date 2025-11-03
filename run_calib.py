@@ -6,7 +6,7 @@ from Calibration.keypoints_calibration import calibrate_cameras
 # result = calibrate_cameras(
 #     path_to_openpose_keypoints_dir=r"C:\Users\Miro Hernandez\Documents\Pose2sim Calibration Project\Demo_SinglePerson\pose-sync",
 #     path_to_intrinsics_file=r"C:\Users\Miro Hernandez\Documents\Pose2sim Calibration Project\Demo_SinglePerson\calibration\extrinsics\Calib_qualisys.toml",
-#     path_to_segments_file=r"C:\Users\Miro Hernandez\Documents\Github Projects\Calibration_scripts\segments_Body_25.toml",
+#     path_to_segments_file=r"C:\Users\Miro Hernandez\Documents\Github Projects\Calibration_scripts\segments_Halpe_26.toml",
 #     confidence_threshold_keypoints=0.7,
 #     path_to_pose2sim_project_dir=r"C:\Users\Miro Hernandez\Documents\Pose2sim Calibration Project\Demo_SinglePerson",
 #     output_path_calibration=r"C:\Users\Miro Hernandez\Documents\Pose2sim Calibration Project\Demo_SinglePerson\calibration",
@@ -37,7 +37,7 @@ result = calibrate_cameras(
 # result = calibrate_cameras(
 #     path_to_openpose_keypoints_dir=r"C:\Users\Miro Hernandez\Documents\GaitScape\tom chengs data\pose",
 #     path_to_intrinsics_file=None,
-#     path_to_segments_file=r"C:\Users\Miro Hernandez\Documents\Github Projects\Calibration_scripts\segments_Body_25.toml",
+#     path_to_segments_file=r"C:\Users\Miro Hernandez\Documents\Github Projects\Calibration_scripts\segments_Halpe_26.toml",
 #     confidence_threshold_keypoints=0.7,
 #     path_to_pose2sim_project_dir=r"C:\Users\Miro Hernandez\Documents\GaitScape\tom chengs data",
 #     output_path_calibration=r"C:\Users\Miro Hernandez\Documents\GaitScape\tom chengs data\calibration",
