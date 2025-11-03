@@ -19,7 +19,7 @@ from Calibration.keypoints_calibration import calibrate_cameras
 # TODO: Implement an automatic img_width and img_height detection based on a video frame.
 # My Data
 result = calibrate_cameras(
-    path_to_openpose_keypoints_dir=r"C:\Users\Miro Hernandez\Documents\GaitScape\S01_STRC111_New\P07_paper\T07_Padless\pose",
+    path_to_keypoints_dir=r"C:\Users\Miro Hernandez\Documents\GaitScape\S01_STRC111_New\P07_paper\T07_Padless\pose",
     path_to_intrinsics_file=r"C:\Users\Miro Hernandez\Documents\GaitScape\S01_STRC111_New\P07_paper\copy of calib\Calib_scene.toml",
     path_to_segments_file=r"C:\Users\Miro Hernandez\Documents\Github Projects\Calibration_scripts\segments_Body_25.toml",
     confidence_threshold_keypoints=0.7,
