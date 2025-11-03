@@ -47,14 +47,14 @@ from Calibration.calculate_scale import calculate_scale_factor, apply_scale_to_r
 
 
 
-def calibrate_cameras(path_to_openpose_keypoints_dir, path_to_segments_file, 
+def calibrate_cameras(path_to_keypoints_dir, path_to_segments_file, 
                       confidence_threshold_keypoints,  path_to_pose2sim_project_dir, output_path_calibration,output_filename, img_width, img_height, calc_intrinsics_method='default', optimization_method='Liu', path_to_intrinsics_file=None, confidence_threshold_cascalib=0.7):
     """
     Perform hybrid camera calibration using 2D keypoints, 3D markers, and segment definitions.
 
     Args:
-        path_to_openpose_keypoints_dir (str): 
-            Path to the directory containing 2D keypoints estimated by OpenPose for all cameras.
+        path_to_keypoints_dir (str): 
+            Path to the directory containing 2D keypoints estimated by a compatible Pose estimator for all cameras.
             Each subfolder should correspond to a camera, containing per-frame JSON.
 
         path_to_intrinsics_file (str): 
@@ -91,8 +91,8 @@ def calibrate_cameras(path_to_openpose_keypoints_dir, path_to_segments_file,
 
         optimization_method (str, optional): 
             Extrinsic optimization strategy:
-            - `'Liu'`: Single-stage Liu et al. method.
-            - `'Combined'`: Hybrid optimization combining multiple refinement stages (recommended).
+            - `'Liu'`: Two Staged Liu et al. method.
+            - `'Combined'`: Hybrid optimization combining multiple refinement stages (Liu and Bundle_Adjustment).
 
         confidence_threshold_cascalib (float, optional): 
             Confidence threshold used specifically for CasCalib-based intrinsic estimation.
@@ -106,7 +106,7 @@ def calibrate_cameras(path_to_openpose_keypoints_dir, path_to_segments_file,
     try:
         # Create Path objects
         # ROOT_PATH_FOR_ALPHAPOSE_KEYPOINTS = Path(alphapose_dir)
-        ROOT_PATH_FOR_OPENPOSE_KEYPOINTS = Path(path_to_openpose_keypoints_dir)
+        ROOT_PATH_FOR_OPENPOSE_KEYPOINTS = Path(path_to_keypoints_dir)
         
         # Find all JSON files
         # json_files = list(ROOT_PATH_FOR_ALPHAPOSE_KEYPOINTS.glob('*.json'))
@@ -130,7 +130,7 @@ def calibrate_cameras(path_to_openpose_keypoints_dir, path_to_segments_file,
         print("OpenPose keypoints directories:", OPENPOSE_KEYPOINTS_DIRECTORY)
         
         if not OPENPOSE_KEYPOINTS_DIRECTORY:
-            print(f"No subdirectories found in OpenPose directory: {path_to_openpose_keypoints_dir}")
+            print(f"No subdirectories found in OpenPose directory: {path_to_keypoints_dir}")
             return False
         
         print("Found directories:", OPENPOSE_KEYPOINTS_DIRECTORY)
@@ -154,13 +154,13 @@ def calibrate_cameras(path_to_openpose_keypoints_dir, path_to_segments_file,
                 print(f"Temporary output folder for alphapose conversion: {temp_dir}")
 
                 # Loop through all OpenPose keypoint directories
-                for i, path_to_openpose_keypoints_dir in enumerate(OPENPOSE_KEYPOINTS_DIRECTORY):
+                for i, path_to_keypoints_dir in enumerate(OPENPOSE_KEYPOINTS_DIRECTORY):
                     output_file = os.path.join(temp_dir, f"alphapose_results_cam{i+1}.json")
 
                     # Call the converter function directly
-                    OpenPose_to_AlphaPose_func(path_to_openpose_keypoints_dir, output_file)
+                    OpenPose_to_AlphaPose_func(path_to_keypoints_dir, output_file)
 
-                    print(f"Converted: {path_to_openpose_keypoints_dir}")
+                    print(f"Converted: {path_to_keypoints_dir}")
                     print(f"Output: {output_file}")
                 # TODO: Call CasCalib function here to get Ks
                 ROOT_PATH_FOR_ALPHAPOSE_KEYPOINTS = Path(temp_dir)
